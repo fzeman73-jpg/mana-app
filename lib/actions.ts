@@ -67,3 +67,47 @@ export async function toggleMetric(id: string, currentStatus: boolean) {
   })
   revalidatePath("/")
 }
+
+export async function toggleUserRole(userId: string, currentRole: string) {
+  const session = await auth()
+  // Tady by měla být kontrola, jestli JE přihlášený uživatel Admin (vyřešíme v page)
+  
+  const newRole = currentRole === "ADMIN" ? "MANAGER" : "ADMIN"
+  
+  await prisma.user.update({
+    where: { id: userId },
+    data: { role: newRole }
+  })
+  
+  revalidatePath("/")
+}
+
+// lib/actions.ts
+export async function inviteUser(formData: FormData) {
+  const session = await auth()
+  const adminEmail = session?.user?.email
+  
+  // Kontrola, zda akci provádí admin
+  const admin = await prisma.user.findUnique({ where: { email: adminEmail || "" } })
+  if (admin?.role !== "ADMIN") throw new Error("Nepovolená akce")
+
+  const email = formData.get("email") as string
+  const name = formData.get("name") as string
+
+  await prisma.user.upsert({
+    where: { email },
+    update: { isAllowed: true },
+    create: { email, name, isAllowed: true, role: "MANAGER" }
+  })
+
+  revalidatePath("/admin")
+}
+
+export async function removeUser(userId: string) {
+  // Jen nastavíme isAllowed na false (nebo smažeme)
+  await prisma.user.update({
+    where: { id: userId },
+    data: { isAllowed: false }
+  })
+  revalidatePath("/admin")
+}

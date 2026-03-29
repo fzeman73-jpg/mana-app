@@ -35,3 +35,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
   secret: process.env.AUTH_SECRET,
 })
+
+// auth.ts
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  providers: [Google],
+  callbacks: {
+    async signIn({ user }) {
+      if (!user.email) return false;
+
+      // Podíváme se do DB, jestli uživatel existuje a má isAllowed: true
+      const dbUser = await prisma.user.findUnique({
+        where: { email: user.email }
+      });
+
+      // Pokud v DB není nebo nemá povolení, nepustíme ho
+      return dbUser?.isAllowed ?? false;
+    },
+  },
+})
