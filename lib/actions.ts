@@ -4,7 +4,8 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
 import { revalidatePath } from "next/cache"
 
-// 1. ULOŽENÍ FINANČNÍCH PARAMETRŮ
+// --- 1. SEKCE: DASHBOARD (Peněžitá data a milníky) ---
+
 export async function updateCompensation(formData: FormData) {
   const session = await auth()
   const email = session?.user?.email
@@ -19,11 +20,11 @@ export async function updateCompensation(formData: FormData) {
     grantMultiplier: parseFloat(formData.get("grantMultiplier") as string) || 0,
   }
 
-  // Najdeme uživatele podle emailu (nebo ho vytvoříme, pokud v DB ještě není)
+  // Najdeme uživatele podle emailu (nebo ho vytvoříme)
   const user = await prisma.user.upsert({
     where: { email: email },
     update: {},
-    create: { email: email, name: session.user?.name }
+    create: { email: email, name: session.user?.name, isAllowed: true }
   })
 
   // Uložíme nebo aktualizujeme jeho compensation
@@ -36,7 +37,6 @@ export async function updateCompensation(formData: FormData) {
   revalidatePath("/")
 }
 
-// 2. PŘIDÁNÍ MILNÍKU
 export async function addStrategicMetric(formData: FormData) {
   const session = await auth()
   const email = session?.user?.email
@@ -59,7 +59,6 @@ export async function addStrategicMetric(formData: FormData) {
   revalidatePath("/")
 }
 
-// 3. PŘEPNUTÍ MILNÍKU
 export async function toggleMetric(id: string, currentStatus: boolean) {
   await prisma.strategicMetric.update({
     where: { id },
@@ -68,19 +67,8 @@ export async function toggleMetric(id: string, currentStatus: boolean) {
   revalidatePath("/")
 }
 
-export async function toggleUserRole(userId: string, currentRole: string) {
-  const session = await auth()
-  // Tady by měla být kontrola, jestli JE přihlášený uživatel Admin (vyřešíme v page)
-  
-  const newRole = currentRole === "ADMIN" ? "MANAGER" : "ADMIN"
-  
-  await prisma.user.update({
-    where: { id: userId },
-    data: { role: newRole }
-  })
-  
-  revalidatePath("/")
-}
+
+// --- 2. SEKCE: ADMIN MANAGEMENT (Správa uživatelů) ---
 
 export async function inviteUser(formData: FormData) {
   const email = formData.get("email") as string
@@ -103,10 +91,14 @@ export async function removeUser(userId: string) {
 }
 
 export async function toggleUserRole(userId: string, currentRole: string) {
+  // Funkce je zde pouze jednou - opraveno pro Vercel
   const newRole = currentRole === "ADMIN" ? "MANAGER" : "ADMIN"
+  
   await prisma.user.update({
     where: { id: userId },
     data: { role: newRole }
   })
+  
   revalidatePath("/admin")
+  revalidatePath("/")
 }
