@@ -1,20 +1,22 @@
 import { auth, signIn, signOut } from "@/auth"
 import { prisma } from "@/lib/db"
 import { updateCompensation, addStrategicMetric, toggleMetric } from "@/lib/actions"
+// Importujeme typy pro TypeScript, aby neodmlouval
+import { StrategicMetric, Compensation } from "@prisma/client"
 
 export default async function Home() {
   const session = await auth()
 
-  // 1. LOGIN SCREEN (Pokud není přihlášen email)
+  // 1. LOGIN SCREEN - Pokud není aktivní session
   if (!session?.user?.email) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-900 text-white p-6">
-        <div className="text-center p-10 border border-slate-700 rounded-3xl bg-slate-800 shadow-2xl max-w-md w-full">
-          <h1 className="text-4xl font-black mb-6 tracking-tight italic text-blue-500 text-center">MANA APP</h1>
-          <p className="text-slate-400 mb-8 font-medium">Vstupte do svého manažerského cockpitů.</p>
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white p-6">
+        <div className="text-center p-12 border border-slate-800 rounded-[3rem] bg-slate-900 shadow-2xl max-w-md w-full border-b-4 border-b-blue-600">
+          <h1 className="text-5xl font-black mb-2 tracking-tighter italic uppercase text-white">Mana<span className="text-blue-500">App</span></h1>
+          <p className="text-slate-500 mb-10 font-medium italic tracking-wide text-sm underline decoration-blue-900 underline-offset-8">Executive Performance Cockpit</p>
           <form action={async () => { "use server"; await signIn("google") }}>
-            <button className="w-full bg-white text-black font-bold py-4 px-8 rounded-full hover:bg-blue-500 hover:text-white transition-all shadow-lg active:scale-95">
-              Přihlásit se přes Google
+            <button className="w-full bg-white text-black font-black py-5 px-8 rounded-2xl hover:bg-blue-500 hover:text-white transition-all shadow-xl active:scale-95 uppercase tracking-[0.2em] text-xs">
+              Vstoupit přes Google
             </button>
           </form>
         </div>
@@ -24,25 +26,29 @@ export default async function Home() {
 
   const userEmail = session.user.email
 
-  // 2. NAČTENÍ DAT PODLE EMAILU (Bezpečnější bez adaptéru)
-  let comp = null
-  let metrics = []
+  // 2. NAČTENÍ DAT PODLE EMAILU (Bezpečné pro JWT strategii bez adaptéru)
+  let comp: Compensation | null = null
+  let metrics: StrategicMetric[] = []
 
   try {
-    // Hledáme compensation, která patří uživateli s tímto emailem
-    comp = await prisma.compensation.findFirst({
-      where: { user: { email: userEmail } }
+    const userData = await prisma.user.findUnique({
+      where: { email: userEmail },
+      include: { 
+        compensation: true,
+        metrics: true 
+      }
     })
 
-    metrics = await prisma.strategicMetric.findMany({
-      where: { user: { email: userEmail } }
-    })
+    if (userData) {
+      comp = userData.compensation
+      metrics = userData.metrics
+    }
   } catch (error) {
-    console.error("Chyba při komunikaci s Neonem:", error)
+    console.error("Database sync error:", error)
   }
 
-  // 3. VÝPOČETNÍ ENGINE
-  const currentEbitda = 50000000 // Simulace: 50M
+  // 3. VÝPOČETNÍ LOGIKA (Simulované konstanty pro firmu)
+  const currentEbitda = 50000000 
   const baseMultiplier = 6.0
   
   const bonusMultiplier = metrics
@@ -50,124 +56,141 @@ export default async function Home() {
     .reduce((sum, m) => sum + m.multiplierImpact, 0)
     
   const effectiveMultiplier = baseMultiplier + bonusMultiplier
-  
   const currentVal = currentEbitda * effectiveMultiplier
   const grantVal = (comp?.grantEbitda || 0) * (comp?.grantMultiplier || 0)
   const popPayout = Math.max(0, (currentVal - grantVal) * ((comp?.popUnits || 0) / 100))
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-blue-100">
       {/* NAVBAR */}
-      <nav className="bg-white border-b px-8 py-4 flex justify-between items-center sticky top-0 z-20">
-        <h1 className="text-xl font-black tracking-tighter italic">MANA<span className="text-blue-600">APP</span></h1>
-        <div className="flex items-center gap-4">
-          <div className="text-right hidden sm:block font-sans">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">Manager</p>
-            <p className="text-sm font-black text-slate-800 leading-none">{session.user?.name}</p>
+      <nav className="bg-white/80 backdrop-blur-md border-b px-8 py-5 flex justify-between items-center sticky top-0 z-30">
+        <h1 className="text-2xl font-black tracking-tighter italic uppercase text-slate-900">
+          Mana<span className="text-blue-600">App</span>
+        </h1>
+        <div className="flex items-center gap-6">
+          <div className="text-right hidden sm:block leading-none">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Executive Unit</p>
+            <p className="text-sm font-black text-slate-900 italic">{session.user?.name}</p>
           </div>
           {session.user?.image && (
-            <img 
-                src={session.user.image} 
-                className="w-10 h-10 rounded-full border-2 border-blue-100 shadow-sm" 
-                alt="Avatar" 
-                referrerPolicy="no-referrer"
-            />
+            <img src={session.user.image} className="w-10 h-10 rounded-full ring-4 ring-blue-50 shadow-md border border-white" referrerPolicy="no-referrer" />
           )}
           <form action={async () => { "use server"; await signOut() }}>
-            <button className="p-2 text-slate-300 hover:text-red-500 transition-colors">✕</button>
+            <button className="group relative p-2">
+                <span className="text-[10px] font-black text-slate-300 group-hover:text-red-500 transition-colors uppercase tracking-widest">Exit</span>
+            </button>
           </form>
         </div>
       </nav>
 
-      <main className="max-w-6xl mx-auto py-10 px-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <main className="max-w-6xl mx-auto py-12 px-6 grid grid-cols-1 lg:grid-cols-3 gap-12">
         
-        {/* LEVÝ PANEL: NASTAVENÍ */}
-        <div className="lg:col-span-1 space-y-6">
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-            <h2 className="font-black text-slate-800 text-lg mb-6 tracking-tight">Parametry Plánu</h2>
-            <form action={updateCompensation} className="space-y-5">
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Měsíční fix (CZK)</label>
-                <input name="baseSalary" type="number" step="0.01" defaultValue={comp?.baseSalary || 0} className="w-full text-lg font-bold border-b-2 border-slate-100 focus:border-blue-500 outline-none transition-colors py-1" />
+        {/* LEVÝ SLOUP: PARAMETRY */}
+        <div className="lg:col-span-1 space-y-8">
+          <section className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-2 h-full bg-blue-600 opacity-10"></div>
+            <h2 className="font-black text-slate-900 text-xl mb-8 tracking-tight uppercase italic underline decoration-blue-500 decoration-4 underline-offset-8">Data Entry</h2>
+            
+            <form action={updateCompensation} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">Monthly Base (CZK)</label>
+                <input name="baseSalary" type="number" step="0.01" defaultValue={comp?.baseSalary || 0} className="w-full bg-slate-50 rounded-2xl px-6 py-4 font-black border-2 border-transparent focus:border-blue-600 focus:bg-white outline-none transition-all text-slate-800 shadow-inner" />
               </div>
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Roční bonus cíl (CZK)</label>
-                <input name="targetBonusAnnual" type="number" step="0.01" defaultValue={comp?.targetBonusAnnual || 0} className="w-full text-lg font-bold border-b-2 border-slate-100 focus:border-blue-500 outline-none transition-colors py-1" />
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">Annual Bonus Target (CZK)</label>
+                <input name="targetBonusAnnual" type="number" step="0.01" defaultValue={comp?.targetBonusAnnual || 0} className="w-full bg-slate-50 rounded-2xl px-6 py-4 font-black border-2 border-transparent focus:border-blue-600 focus:bg-white outline-none transition-all text-slate-800 shadow-inner" />
               </div>
               
-              <div className="pt-6 border-t border-slate-50">
-                <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] mb-4">Phantom Options (POP)</p>
-                <div className="space-y-4">
-                   <div className="flex justify-between items-end border-b-2 border-slate-100 py-1">
-                    <label className="text-xs font-bold text-slate-400">Podíl (%)</label>
-                    <input name="popUnits" type="number" step="0.01" defaultValue={comp?.popUnits || 0} className="text-right font-black w-20 outline-none bg-transparent" />
+              <div className="pt-8 mt-8 border-t-2 border-slate-50">
+                <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.3em] mb-6 text-center italic">POP Configuration</p>
+                <div className="space-y-3">
+                   <div className="flex justify-between items-center bg-slate-900 p-4 rounded-2xl text-white shadow-xl">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Share %</label>
+                    <input name="popUnits" type="number" step="0.01" defaultValue={comp?.popUnits || 0} className="font-black w-16 text-right bg-transparent outline-none text-blue-400 text-lg" />
                   </div>
-                  <div className="flex justify-between items-end border-b-2 border-slate-100 py-1">
-                    <label className="text-xs font-bold text-slate-400">EBITDA start</label>
-                    <input name="grantEbitda" type="number" step="0.01" defaultValue={comp?.grantEbitda || 0} className="text-right font-black w-32 outline-none bg-transparent" />
+                  <div className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Grant EBITDA</label>
+                    <input name="grantEbitda" type="number" step="0.01" defaultValue={comp?.grantEbitda || 0} className="font-black w-28 text-right bg-transparent outline-none text-slate-900" />
                   </div>
-                  <div className="flex justify-between items-end border-b-2 border-slate-100 py-1">
-                    <label className="text-xs font-bold text-slate-400">Multiplier start</label>
-                    <input name="grantMultiplier" type="number" step="0.01" defaultValue={comp?.grantMultiplier || 0} className="text-right font-black w-16 outline-none bg-transparent" />
+                  <div className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Grant Multiplier</label>
+                    <input name="grantMultiplier" type="number" step="0.01" defaultValue={comp?.grantMultiplier || 0} className="font-black w-16 text-right bg-transparent outline-none text-slate-900" />
                   </div>
                 </div>
               </div>
 
-              <button type="submit" className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-blue-600 transition-all shadow-xl shadow-slate-200 active:scale-95">
-                Uložit nastavení
+              <button type="submit" className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black hover:bg-blue-600 transition-all shadow-2xl active:scale-95 uppercase tracking-[0.2em] text-[10px] mt-6">
+                Update Model
               </button>
             </form>
-          </div>
+          </section>
         </div>
 
-        {/* PRAVÝ PANEL: DASHBOARD */}
-        <div className="lg:col-span-2 space-y-8">
+        {/* PRAVÝ SLOUP: DASHBOARD */}
+        <div className="lg:col-span-2 space-y-12">
           
-          <div className="bg-blue-600 rounded-[2.5rem] p-10 text-white shadow-2xl shadow-blue-200 relative overflow-hidden">
+          <div className="bg-slate-900 rounded-[3.5rem] p-12 text-white shadow-2xl relative overflow-hidden ring-1 ring-white/10">
             <div className="relative z-10">
-              <h3 className="text-blue-100 text-sm font-bold uppercase tracking-widest opacity-80">Aktuální hodnota POP</h3>
-              <div className="text-5xl md:text-6xl font-black mt-4 tracking-tighter">
-                {Intl.NumberFormat('cs-CZ').format(Math.round(popPayout))} <span className="text-2xl font-normal opacity-50">Kč</span>
-              </div>
-              <div className="mt-10 flex gap-8 border-t border-blue-500 pt-6">
+              <header className="flex justify-between items-start mb-12">
                 <div>
-                  <p className="text-blue-200 text-[10px] font-bold uppercase mb-1">Firmy EBITDA</p>
-                  <p className="font-black text-xl italic text-white">{(currentEbitda / 1000000).toFixed(0)}M</p>
+                    <h3 className="text-blue-500 text-[11px] font-black uppercase tracking-[0.4em] mb-2 italic">Phantom Capital Gain</h3>
+                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest leading-relaxed">Aktuální hodnota k dnešnímu dni (Brutto)</p>
                 </div>
-                <div>
-                  <p className="text-blue-200 text-[10px] font-bold uppercase mb-1">Váš Multiplier</p>
-                  <p className="font-black text-xl italic text-white">{effectiveMultiplier.toFixed(2)}x</p>
+                <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/30 rounded-full px-5 py-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-ping"></div>
+                    <span className="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em]">Real-Time Value</span>
+                </div>
+              </header>
+              
+              <div className="text-6xl md:text-8xl font-black tracking-tighter mb-16 italic text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-500">
+                {Intl.NumberFormat('cs-CZ').format(Math.round(popPayout))} <span className="text-2xl font-normal not-italic opacity-20 ml-2 text-white">CZK</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-12 border-t border-slate-800/50 pt-12">
+                <div className="group cursor-help">
+                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-3 transition-colors group-hover:text-blue-500">Market EBITDA</p>
+                  <p className="font-black text-3xl italic text-white leading-none">{(currentEbitda / 1000000).toFixed(0)}M <span className="text-xs opacity-30 not-italic uppercase ml-1">Base</span></p>
+                </div>
+                <div className="group cursor-help">
+                  <p className="text-blue-500 text-[10px] font-black uppercase tracking-widest mb-3 text-right sm:text-left transition-colors group-hover:text-white underline decoration-blue-900 underline-offset-4">Performance Multiplier</p>
+                  <p className="font-black text-3xl italic text-white leading-none text-right sm:text-left">{effectiveMultiplier.toFixed(2)}x <span className="text-xs opacity-30 not-italic uppercase ml-1">Eff.</span></p>
                 </div>
               </div>
             </div>
-            <div className="absolute -right-20 -top-20 w-80 h-80 bg-blue-400 rounded-full opacity-20 blur-3xl"></div>
+            {/* Dekorativní glow efekt */}
+            <div className="absolute -right-20 -bottom-20 w-[400px] h-[400px] bg-blue-600 rounded-full opacity-10 blur-[120px]"></div>
           </div>
 
           {/* MILNÍKY */}
-          <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-            <h2 className="font-black text-slate-800 text-lg italic tracking-tight mb-6">Strategické milníky</h2>
+          <div className="bg-white p-12 rounded-[3rem] border border-slate-100 shadow-sm relative overflow-hidden">
+            <header className="flex justify-between items-center mb-12 border-b border-slate-50 pb-8">
+               <h2 className="font-black text-slate-900 text-2xl tracking-tight uppercase italic italic">Strategické <span className="text-blue-600">Boostery</span></h2>
+               <div className="text-[10px] font-black text-slate-400 tracking-[0.3em] uppercase opacity-50">Impact Board</div>
+            </header>
             
-            <form action={addStrategicMetric} className="flex gap-2 mb-8 bg-slate-50 p-2 rounded-2xl">
-              <input name="name" placeholder="Název milníku..." className="flex-1 bg-transparent px-4 py-2 outline-none font-bold text-sm" required />
-              <input name="multiplierImpact" type="number" step="0.1" placeholder="+0.2" className="w-20 bg-white rounded-xl px-2 py-2 text-center font-black shadow-sm" required />
-              <button type="submit" className="bg-slate-900 text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-600 transition-colors uppercase text-xs tracking-widest">Přidat</button>
+            <form action={addStrategicMetric} className="flex flex-col sm:flex-row gap-4 mb-12 bg-slate-50 p-4 rounded-3xl border border-slate-100 shadow-inner">
+              <input name="name" placeholder="Pojmenujte strategický cíl (např. Expanze EU)..." className="flex-1 bg-transparent px-6 py-3 outline-none font-bold text-sm text-slate-800 placeholder:text-slate-300" required />
+              <div className="flex gap-2">
+                <input name="multiplierImpact" type="number" step="0.1" placeholder="+0.2" className="w-24 bg-white rounded-2xl px-4 py-3 text-center font-black shadow-sm text-blue-600 outline-none border-2 border-transparent focus:border-blue-500 transition-all" required />
+                <button type="submit" className="bg-slate-900 text-white px-8 py-3 rounded-2xl font-black hover:bg-blue-600 transition-all text-[10px] uppercase tracking-widest active:scale-95 shadow-xl">Boost</button>
+              </div>
             </form>
 
-            <div className="space-y-3 font-sans">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {metrics.length === 0 ? (
-                <p className="text-center text-slate-300 py-6 font-bold text-sm italic">Žádné milníky zatím nebyly definovány.</p>
+                <div className="col-span-2 text-center text-slate-300 py-16 font-bold text-sm italic border-4 border-dotted border-slate-50 rounded-[3rem]">Zatím nebyly definovány žádné multiplikační úkoly.</div>
               ) : (
                 metrics.map((m) => (
-                  <div key={m.id} className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${m.isCompleted ? 'bg-slate-50 border-transparent opacity-60' : 'bg-white border-slate-100 hover:border-blue-200 shadow-sm'}`}>
-                    <div className="flex items-center gap-4">
+                  <div key={m.id} className={`flex items-center justify-between p-6 rounded-[2rem] border-2 transition-all ${m.isCompleted ? 'bg-blue-50/50 border-transparent' : 'bg-white border-slate-50 hover:border-blue-100 shadow-sm group'}`}>
+                    <div className="flex items-center gap-5">
                       <form action={toggleMetric.bind(null, m.id, m.isCompleted)}>
-                        <button type="submit" className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${m.isCompleted ? 'bg-green-500 border-green-500 text-white' : 'border-slate-200 hover:border-blue-400'}`}>
-                          {m.isCompleted && <span className="text-xs font-bold">✓</span>}
+                        <button type="submit" className={`w-10 h-10 rounded-2xl border-2 flex items-center justify-center transition-all ${m.isCompleted ? 'bg-blue-600 border-blue-600 text-white shadow-lg rotate-12' : 'bg-white border-slate-200 group-hover:border-blue-400 group-hover:rotate-6'}`}>
+                          {m.isCompleted ? <span className="text-xs font-black italic uppercase">On</span> : <span className="text-xs font-black text-slate-200 uppercase">Off</span>}
                         </button>
                       </form>
                       <div>
-                        <p className={`font-bold text-sm ${m.isCompleted ? 'line-through text-slate-400 text-sm' : 'text-slate-800'}`}>{m.name}</p>
-                        <p className="text-[10px] font-black text-blue-500 tracking-widest">IMPACT: +{m.multiplierImpact.toFixed(1)}x</p>
+                        <p className={`font-black text-[13px] uppercase tracking-tight ${m.isCompleted ? 'text-blue-900 italic' : 'text-slate-700'}`}>{m.name}</p>
+                        <p className="text-[9px] font-black text-blue-500 tracking-[0.2em] mt-1.5 opacity-70">Multiplier Impact: +{m.multiplierImpact.toFixed(1)}x</p>
                       </div>
                     </div>
                   </div>
@@ -175,7 +198,6 @@ export default async function Home() {
               )}
             </div>
           </div>
-
         </div>
       </main>
     </div>
