@@ -4,10 +4,12 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
 import { revalidatePath } from "next/cache"
 
-// 1. ULOŽENÍ FINANČNÍCH PARAMETRŮ (Základ, Bonus, POP)
+// 1. ULOŽENÍ FINANČNÍCH PARAMETRŮ
 export async function updateCompensation(formData: FormData) {
   const session = await auth()
-  if (!session?.user?.id) throw new Error("Nepřihlášen")
+  const email = session?.user?.email
+
+  if (!email) throw new Error("Nepřihlášen")
 
   const data = {
     baseSalary: parseFloat(formData.get("baseSalary") as string) || 0,
@@ -17,36 +19,47 @@ export async function updateCompensation(formData: FormData) {
     grantMultiplier: parseFloat(formData.get("grantMultiplier") as string) || 0,
   }
 
-  await prisma.compensation.upsert({
-    where: { userId: session.user.id },
-    update: data,
-    create: { ...data, userId: session.user.id }
+  // Najdeme uživatele podle emailu (nebo ho vytvoříme, pokud v DB ještě není)
+  const user = await prisma.user.upsert({
+    where: { email: email },
+    update: {},
+    create: { email: email, name: session.user?.name }
   })
 
-  // Tohle zajistí, že se dashboard okamžitě překreslí s novými čísly
+  // Uložíme nebo aktualizujeme jeho compensation
+  await prisma.compensation.upsert({
+    where: { userId: user.id },
+    update: data,
+    create: { ...data, userId: user.id }
+  })
+
   revalidatePath("/")
 }
 
-// 2. PŘIDÁNÍ STRATEGICKÉHO ÚKOLU (Ovlivňuje multiplier)
+// 2. PŘIDÁNÍ MILNÍKU
 export async function addStrategicMetric(formData: FormData) {
   const session = await auth()
-  if (!session?.user?.id) return
+  const email = session?.user?.email
+  if (!email) return
 
   const name = formData.get("name") as string
   const impact = parseFloat(formData.get("multiplierImpact") as string) || 0
+
+  const user = await prisma.user.findUnique({ where: { email } })
+  if (!user) return
 
   await prisma.strategicMetric.create({
     data: {
       name,
       multiplierImpact: impact,
-      userId: session.user.id,
+      userId: user.id,
     }
   })
 
   revalidatePath("/")
 }
 
-// 3. PŘEPNUTÍ ÚKOLU (Splněno/Nesplněno)
+// 3. PŘEPNUTÍ MILNÍKU
 export async function toggleMetric(id: string, currentStatus: boolean) {
   await prisma.strategicMetric.update({
     where: { id },
