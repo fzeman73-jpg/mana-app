@@ -36,20 +36,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.AUTH_SECRET,
 })
 
-// auth.ts
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [Google],
   callbacks: {
     async signIn({ user }) {
-      if (!user.email) return false;
+      if (!user.email) return false
 
-      // Podíváme se do DB, jestli uživatel existuje a má isAllowed: true
       const dbUser = await prisma.user.findUnique({
         where: { email: user.email }
-      });
+      })
 
-      // Pokud v DB není nebo nemá povolení, nepustíme ho
-      return dbUser?.isAllowed ?? false;
+      // Tady je ta nová brána:
+      // Pustíme ho jen pokud už je v DB a má isAllowed: true
+      return dbUser?.isAllowed ?? false
+    },
+    // Tady nechej své původní JWT a session callbacky, co už tam máš:
+    async jwt({ token, user }) {
+      if (user) token.id = user.id
+      return token
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        session.user.id = token.id as string
+      }
+      return session
     },
   },
 })
