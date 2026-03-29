@@ -21,11 +21,11 @@ export default async function Home() {
           {/* LOGO ALGOTECHU NA LOGINU */}
           <div className="flex justify-center mb-10 mt-4">
              <Image 
-                src="/algotech-logo.png" // Cesta k tvému logu ve složce public
+                src="/algotech-logo.png" 
                 alt="Algotech Logo"
-                width={200} // Uprav šířku podle potřeby
-                height={60} // Uprav výšku podle potřeby
-                priority // Načte se přednostně
+                width={200} 
+                height={60} 
+                priority 
                 className="opacity-90"
              />
           </div>
@@ -48,6 +48,7 @@ export default async function Home() {
   // 2. NAČTENÍ DAT PODLE EMAILU
   let comp: Compensation | null = null
   let metrics: StrategicMetric[] = []
+  let userRole = "MANAGER"
 
   try {
     const userData = await prisma.user.findUnique({
@@ -57,11 +58,11 @@ export default async function Home() {
         metrics: true 
       }
     })
-    const userRole = userData?.role || "MANAGER";
 
     if (userData) {
       comp = userData.compensation
       metrics = userData.metrics
+      userRole = userData.role
     }
   } catch (error) {
     console.error("Database sync error:", error)
@@ -79,48 +80,50 @@ export default async function Home() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-blue-100">
       
-      {/* NAVBAR - S LOGEM ALGOTECHU */}
+      {/* NAVBAR */}
       <nav className="bg-white/80 backdrop-blur-md border-b px-8 py-4 flex justify-between items-center sticky top-0 z-30 shadow-sm border-slate-100">
         
-        {/* LOGO ALGOTECHU V NAVBARU (Náhrada za MANAAPP) */}
         <div className="flex items-center gap-2">
             <Image 
-                src="/algotech-logo.png" // Stejný soubor
+                src="/algotech-logo.png" 
                 alt="Algotech"
-                width={120} // Menší šířka pro navbar
+                width={120} 
                 height={35}
-                className="object-contain" // Zajistí, že se logo nedeformuje
+                className="object-contain" 
             />
             <span className="w-px h-6 bg-slate-200 ml-2"></span>
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic opacity-60">Cockpit</span>
         </div>
 
         <div className="flex items-center gap-6">
+          {/* --- TLAČÍTKO PRO ADMINA (Nyní správně v Navbaru) --- */}
+          {userRole === "ADMIN" && (
+            <a 
+              href="/admin" 
+              className="bg-blue-600/10 text-blue-600 border border-blue-200 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all flex items-center gap-2 group"
+            >
+              <span className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-pulse group-hover:bg-white"></span>
+              User Control
+            </a>
+          )}
+
           <div className="text-right hidden sm:block leading-none">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1.5">Executive Unit</p>
             <p className="text-sm font-black text-slate-900 italic">{session.user?.name}</p>
           </div>
+          
           {session.user?.image && (
-            <img src={session.user.image} className="w-10 h-10 rounded-full ring-4 ring-blue-50 shadow-md border border-white" referrerPolicy="no-referrer" />
+            <img src={session.user.image} className="w-10 h-10 rounded-full ring-4 ring-blue-50 shadow-md border border-white" referrerPolicy="no-referrer" alt="Profile" />
           )}
+
           <form action={async () => { "use server"; await signOut() }}>
-            <button className="group relative p-2">
-                <span className="text-[10px] font-black text-slate-300 group-hover:text-red-500 transition-colors uppercase tracking-widest">Exit</span>
+            <button className="group relative p-2 text-slate-300 hover:text-red-500 transition-colors uppercase text-[10px] font-black tracking-widest">
+                Exit
             </button>
           </form>
         </div>
       </nav>
-{/* --- TLAČÍTKO PRO ADMINA --- */}
-{userRole === "ADMIN" && (
-  <a 
-    href="/admin" 
-    className="bg-blue-600/10 text-blue-600 border border-blue-200 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm shadow-blue-100/50 flex items-center gap-2"
-  >
-    <span className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-pulse group-hover:bg-white"></span>
-    User Control
-  </a>
-)}
-{/* --- KONEC TLAČÍTKA --- */}
+
       <main className="max-w-6xl mx-auto py-12 px-6 grid grid-cols-1 lg:grid-cols-3 gap-12">
         {/* LEVÝ SLOUP: PARAMETRY */}
         <div className="lg:col-span-1 space-y-8">
