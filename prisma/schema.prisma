@@ -26,12 +26,16 @@ model User {
   // Relace (musí být tady, aby Account a Session fungovaly)
   accounts Account[]
   sessions Session[]
+  compensation  Compensation? 
+  metrics       StrategicMetric[] // Úkoly, které ovlivňují multiplier
+  
+  createdAt     DateTime  @default(now())
 
   // Tvoje aplikace
   tasks   Task[]
   pspPlan PspPlan?
 
-  createdAt DateTime @default(now())
+  
   updatedAt DateTime @updatedAt
 }
 
@@ -84,4 +88,28 @@ model PspPlan {
   id     String @id @default(cuid())
   userId String @unique
   user   User   @relation(fields: [userId], references: [id])
+}
+model Compensation {
+  id                String  @id @default(cuid())
+  userId            String  @unique
+  baseSalary        Float   // Fixní měsíční plat
+  targetBonusAnnual Float   // Roční cílový bonus (variabilní složka)
+  
+  // Phantom Option Plan (POP)
+  popUnits          Float   // Podíl v % nebo počet jednotek
+  grantEbitda       Float   // EBITDA při vstupu
+  grantMultiplier   Float   // Multiplier při vstupu
+  vestingYears      Int     @default(3)
+  startDate         DateTime @default(now())
+
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model StrategicMetric {
+  id          String   @id @default(cuid())
+  name        String   // Název úkolu (např. Expanze DE)
+  multiplierImpact Float // Kolik přidá k multiplieru (např. 0.2)
+  isCompleted Boolean  @default(false)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

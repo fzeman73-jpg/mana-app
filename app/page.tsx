@@ -1,4 +1,5 @@
 import { auth, signIn, signOut } from "../auth";
+import { updateCompensation, addStrategicMetric, toggleMetric } from "@/lib/actions"
 
 export default async function Home() {
   const session = await auth();
