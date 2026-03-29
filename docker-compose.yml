@@ -1,0 +1,10 @@
+services:
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: heslo123
+      POSTGRES_DB: psp_manager
+    ports:
+      - "5432:5432"
