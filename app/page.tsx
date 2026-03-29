@@ -5,8 +5,8 @@ import { updateCompensation, addStrategicMetric, toggleMetric } from "@/lib/acti
 export default async function Home() {
   const session = await auth()
 
-  // 1. POKUD NENÍ PŘIHLÁŠEN, UKAŽ JEN LOGIN
-  if (!session) {
+  // 1. OCHRANA: Pokud uživatel není přihlášen nebo nemáme jeho ID, ukaž login
+  if (!session?.user?.id) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-900 text-white p-6">
         <div className="text-center p-10 border border-slate-700 rounded-3xl bg-slate-800 shadow-2xl max-w-md w-full">
@@ -22,17 +22,20 @@ export default async function Home() {
     )
   }
 
-  // 2. NAČTENÍ DAT Z NEONU (PO PŘIHLÁŠENÍ)
+  // 2. BEZPEČNÉ NAČTENÍ DAT (ID už existuje)
+  const userId = session.user.id
+
   const comp = await prisma.compensation.findUnique({
-    where: { userId: session.user?.id }
+    where: { userId: userId }
   })
 
   const metrics = await prisma.strategicMetric.findMany({
-    where: { userId: session.user?.id }
+    where: { userId: userId }
   })
 
-  // 3. VÝPOČETNÍ ENGINE (Aktuální EBITDA a Base Multiplier jsou zatím fixní)
-  const currentEbitda = 50000000 // 50 milionů
+  // 3. VÝPOČETNÍ ENGINE
+  // Tyto hodnoty (EBITDA a Multiplier) budeme časem tahat z admin nastavení firmy
+  const currentEbitda = 50000000 // Simulace: 50M
   const baseMultiplier = 6.0
   
   const bonusMultiplier = metrics
@@ -41,6 +44,7 @@ export default async function Home() {
     
   const effectiveMultiplier = baseMultiplier + bonusMultiplier
   
+  // Výpočet POP: (Aktuální Hodnota - Hodnota při Grantu) * Podíl
   const currentVal = currentEbitda * effectiveMultiplier
   const grantVal = (comp?.grantEbitda || 0) * (comp?.grantMultiplier || 0)
   const popPayout = Math.max(0, (currentVal - grantVal) * ((comp?.popUnits || 0) / 100))
@@ -55,7 +59,9 @@ export default async function Home() {
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Manager</p>
             <p className="text-sm font-black text-slate-800">{session.user?.name}</p>
           </div>
-          <img src={session.user?.image || ""} className="w-10 h-10 rounded-full border-2 border-blue-100 shadow-sm" />
+          {session.user?.image && (
+            <img src={session.user.image} className="w-10 h-10 rounded-full border-2 border-blue-100 shadow-sm" alt="Avatar" />
+          )}
           <form action={async () => { "use server"; await signOut() }}>
             <button className="p-2 text-slate-300 hover:text-red-500 transition-colors">✕</button>
           </form>
@@ -71,26 +77,26 @@ export default async function Home() {
             <form action={updateCompensation} className="space-y-5">
               <div className="group">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Měsíční fix (CZK)</label>
-                <input name="baseSalary" defaultValue={comp?.baseSalary} className="w-full text-lg font-bold border-b-2 border-slate-100 focus:border-blue-500 outline-none transition-colors py-1" />
+                <input name="baseSalary" type="number" step="0.01" defaultValue={comp?.baseSalary || 0} className="w-full text-lg font-bold border-b-2 border-slate-100 focus:border-blue-500 outline-none transition-colors py-1" />
               </div>
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Cílový roční bonus (CZK)</label>
-                <input name="targetBonusAnnual" defaultValue={comp?.targetBonusAnnual} className="w-full text-lg font-bold border-b-2 border-slate-100 focus:border-blue-500 outline-none transition-colors py-1" />
+                <input name="targetBonusAnnual" type="number" step="0.01" defaultValue={comp?.targetBonusAnnual || 0} className="w-full text-lg font-bold border-b-2 border-slate-100 focus:border-blue-500 outline-none transition-colors py-1" />
               </div>
               <div className="pt-6 border-t border-slate-50">
                 <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] mb-4">Phantom Option Plan (POP)</p>
                 <div className="space-y-4">
                   <div className="flex justify-between items-end border-b-2 border-slate-100 py-1">
                     <label className="text-xs font-bold text-slate-400">Tvůj podíl (%)</label>
-                    <input name="popUnits" defaultValue={comp?.popUnits} className="text-right font-black w-20 outline-none" />
+                    <input name="popUnits" type="number" step="0.01" defaultValue={comp?.popUnits || 0} className="text-right font-black w-20 outline-none" />
                   </div>
                   <div className="flex justify-between items-end border-b-2 border-slate-100 py-1">
                     <label className="text-xs font-bold text-slate-400">EBITDA při startu</label>
-                    <input name="grantEbitda" defaultValue={comp?.grantEbitda} className="text-right font-black w-32 outline-none" />
+                    <input name="grantEbitda" type="number" step="0.01" defaultValue={comp?.grantEbitda || 0} className="text-right font-black w-32 outline-none" />
                   </div>
                   <div className="flex justify-between items-end border-b-2 border-slate-100 py-1">
                     <label className="text-xs font-bold text-slate-400">Multiplier start</label>
-                    <input name="grantMultiplier" defaultValue={comp?.grantMultiplier} className="text-right font-black w-16 outline-none" />
+                    <input name="grantMultiplier" type="number" step="0.01" defaultValue={comp?.grantMultiplier || 0} className="text-right font-black w-16 outline-none" />
                   </div>
                 </div>
               </div>
@@ -122,7 +128,6 @@ export default async function Home() {
                 </div>
               </div>
             </div>
-            {/* Dekorativní prvek */}
             <div className="absolute -right-20 -top-20 w-80 h-80 bg-blue-500 rounded-full opacity-30 blur-3xl"></div>
           </div>
 
@@ -135,7 +140,7 @@ export default async function Home() {
             
             <form action={addStrategicMetric} className="flex gap-2 mb-8 bg-slate-50 p-2 rounded-2xl">
               <input name="name" placeholder="Název úkolu..." className="flex-1 bg-transparent px-4 py-2 outline-none font-bold text-sm" required />
-              <input name="multiplierImpact" placeholder="+0.1" className="w-16 bg-white rounded-xl px-2 py-2 text-center font-black shadow-sm" required />
+              <input name="multiplierImpact" type="number" step="0.1" placeholder="+0.1" className="w-16 bg-white rounded-xl px-2 py-2 text-center font-black shadow-sm" required />
               <button type="submit" className="bg-slate-900 text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-600">PŘIDAT</button>
             </form>
 
