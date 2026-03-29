@@ -1,21 +1,40 @@
 import { auth, signIn, signOut } from "@/auth"
 import { prisma } from "@/lib/db"
 import { updateCompensation, addStrategicMetric, toggleMetric } from "@/lib/actions"
-// Importujeme typy pro TypeScript, aby neodmlouval
+// Importujeme typy pro TypeScript
 import { StrategicMetric, Compensation } from "@prisma/client"
+// Importujeme Next.js Image pro optimalizaci obrázků
+import Image from "next/image"
 
 export default async function Home() {
   const session = await auth()
 
-  // 1. LOGIN SCREEN - Pokud není aktivní session
+  // 1. LOGIN SCREEN - S LOGEM ALGOTECHU
   if (!session?.user?.email) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white p-6">
-        <div className="text-center p-12 border border-slate-800 rounded-[3rem] bg-slate-900 shadow-2xl max-w-md w-full border-b-4 border-b-blue-600">
-          <h1 className="text-5xl font-black mb-2 tracking-tighter italic uppercase text-white">Mana<span className="text-blue-500">App</span></h1>
-          <p className="text-slate-500 mb-10 font-medium italic tracking-wide text-sm underline decoration-blue-900 underline-offset-8">Executive Performance Cockpit</p>
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white p-6 relative overflow-hidden">
+        {/* Dekorativní pozadí */}
+        <div className="absolute -left-40 -top-40 w-[600px] h-[600px] bg-blue-900 rounded-full opacity-10 blur-[150px]"></div>
+        
+        <div className="text-center p-12 border border-slate-800 rounded-[3rem] bg-slate-900 shadow-2xl max-w-md w-full border-b-4 border-b-blue-600 relative z-10">
+          
+          {/* LOGO ALGOTECHU NA LOGINU */}
+          <div className="flex justify-center mb-10 mt-4">
+             <Image 
+                src="/algotech-logo.png" // Cesta k tvému logu ve složce public
+                alt="Algotech Logo"
+                width={200} // Uprav šířku podle potřeby
+                height={60} // Uprav výšku podle potřeby
+                priority // Načte se přednostně
+                className="opacity-90"
+             />
+          </div>
+
+          <h1 className="text-3xl font-black mb-2 tracking-tighter italic uppercase text-white">Performance <span className="text-blue-500">Cockpit</span></h1>
+          <p className="text-slate-500 mb-12 font-medium italic tracking-wide text-sm underline decoration-blue-900 underline-offset-8">Executive Incentives Tracking</p>
+          
           <form action={async () => { "use server"; await signIn("google") }}>
-            <button className="w-full bg-white text-black font-black py-5 px-8 rounded-2xl hover:bg-blue-500 hover:text-white transition-all shadow-xl active:scale-95 uppercase tracking-[0.2em] text-xs">
+            <button className="w-full bg-white text-black font-black py-5 px-8 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-xl active:scale-95 uppercase tracking-[0.2em] text-xs">
               Vstoupit přes Google
             </button>
           </form>
@@ -26,7 +45,7 @@ export default async function Home() {
 
   const userEmail = session.user.email
 
-  // 2. NAČTENÍ DAT PODLE EMAILU (Bezpečné pro JWT strategii bez adaptéru)
+  // 2. NAČTENÍ DAT PODLE EMAILU
   let comp: Compensation | null = null
   let metrics: StrategicMetric[] = []
 
@@ -47,14 +66,10 @@ export default async function Home() {
     console.error("Database sync error:", error)
   }
 
-  // 3. VÝPOČETNÍ LOGIKA (Simulované konstanty pro firmu)
+  // 3. VÝPOČETNÍ LOGIKA
   const currentEbitda = 50000000 
   const baseMultiplier = 6.0
-  
-  const bonusMultiplier = metrics
-    .filter(m => m.isCompleted)
-    .reduce((sum, m) => sum + m.multiplierImpact, 0)
-    
+  const bonusMultiplier = metrics.filter(m => m.isCompleted).reduce((sum, m) => sum + m.multiplierImpact, 0)
   const effectiveMultiplier = baseMultiplier + bonusMultiplier
   const currentVal = currentEbitda * effectiveMultiplier
   const grantVal = (comp?.grantEbitda || 0) * (comp?.grantMultiplier || 0)
@@ -62,14 +77,26 @@ export default async function Home() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-blue-100">
-      {/* NAVBAR */}
-      <nav className="bg-white/80 backdrop-blur-md border-b px-8 py-5 flex justify-between items-center sticky top-0 z-30">
-        <h1 className="text-2xl font-black tracking-tighter italic uppercase text-slate-900">
-          Mana<span className="text-blue-600">App</span>
-        </h1>
+      
+      {/* NAVBAR - S LOGEM ALGOTECHU */}
+      <nav className="bg-white/80 backdrop-blur-md border-b px-8 py-4 flex justify-between items-center sticky top-0 z-30 shadow-sm border-slate-100">
+        
+        {/* LOGO ALGOTECHU V NAVBARU (Náhrada za MANAAPP) */}
+        <div className="flex items-center gap-2">
+            <Image 
+                src="/algotech-logo.png" // Stejný soubor
+                alt="Algotech"
+                width={120} // Menší šířka pro navbar
+                height={35}
+                className="object-contain" // Zajistí, že se logo nedeformuje
+            />
+            <span className="w-px h-6 bg-slate-200 ml-2"></span>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic opacity-60">Cockpit</span>
+        </div>
+
         <div className="flex items-center gap-6">
           <div className="text-right hidden sm:block leading-none">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Executive Unit</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1.5">Executive Unit</p>
             <p className="text-sm font-black text-slate-900 italic">{session.user?.name}</p>
           </div>
           {session.user?.image && (
@@ -84,7 +111,6 @@ export default async function Home() {
       </nav>
 
       <main className="max-w-6xl mx-auto py-12 px-6 grid grid-cols-1 lg:grid-cols-3 gap-12">
-        
         {/* LEVÝ SLOUP: PARAMETRY */}
         <div className="lg:col-span-1 space-y-8">
           <section className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 relative overflow-hidden">
@@ -157,14 +183,13 @@ export default async function Home() {
                 </div>
               </div>
             </div>
-            {/* Dekorativní glow efekt */}
-            <div className="absolute -right-20 -bottom-20 w-[400px] h-[400px] bg-blue-600 rounded-full opacity-10 blur-[120px]"></div>
+            <div className="absolute -right-20 -top-20 w-[400px] h-[400px] bg-blue-600 rounded-full opacity-10 blur-[120px]"></div>
           </div>
 
           {/* MILNÍKY */}
           <div className="bg-white p-12 rounded-[3rem] border border-slate-100 shadow-sm relative overflow-hidden">
             <header className="flex justify-between items-center mb-12 border-b border-slate-50 pb-8">
-               <h2 className="font-black text-slate-900 text-2xl tracking-tight uppercase italic italic">Strategické <span className="text-blue-600">Boostery</span></h2>
+               <h2 className="font-black text-slate-900 text-2xl tracking-tight uppercase italic italic underline decoration-blue-500 decoration-4 underline-offset-8">Strategické <span className="text-blue-600">Boostery</span></h2>
                <div className="text-[10px] font-black text-slate-400 tracking-[0.3em] uppercase opacity-50">Impact Board</div>
             </header>
             
