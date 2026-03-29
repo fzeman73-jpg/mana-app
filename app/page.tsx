@@ -57,6 +57,7 @@ export default async function Home() {
         metrics: true 
       }
     })
+    const userRole = userData?.role || "MANAGER";
 
     if (userData) {
       comp = userData.compensation
@@ -109,7 +110,17 @@ export default async function Home() {
           </form>
         </div>
       </nav>
-
+{/* --- TLAČÍTKO PRO ADMINA --- */}
+{userRole === "ADMIN" && (
+  <a 
+    href="/admin" 
+    className="bg-blue-600/10 text-blue-600 border border-blue-200 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm shadow-blue-100/50 flex items-center gap-2"
+  >
+    <span className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-pulse group-hover:bg-white"></span>
+    User Control
+  </a>
+)}
+{/* --- KONEC TLAČÍTKA --- */}
       <main className="max-w-6xl mx-auto py-12 px-6 grid grid-cols-1 lg:grid-cols-3 gap-12">
         {/* LEVÝ SLOUP: PARAMETRY */}
         <div className="lg:col-span-1 space-y-8">
