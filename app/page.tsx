@@ -68,9 +68,10 @@ export default async function Home() {
     console.error("Database sync error:", error)
   }
 
-  // 3. VÝPOČETNÍ LOGIKA
-  const currentEbitda = 50000000 
-  const baseMultiplier = 6.0
+  // 3. GLOBÁLNÍ NASTAVENÍ + VÝPOČETNÍ LOGIKA
+  const globalSettings = await prisma.globalSettings.findUnique({ where: { id: "global" } })
+  const currentEbitda = globalSettings?.currentEbitda ?? 50000000
+  const baseMultiplier = globalSettings?.baseMultiplier ?? 6.0
   const bonusMultiplier = metrics.filter(m => m.isCompleted).reduce((sum, m) => sum + m.multiplierImpact, 0)
   const effectiveMultiplier = baseMultiplier + bonusMultiplier
   const currentVal = currentEbitda * effectiveMultiplier

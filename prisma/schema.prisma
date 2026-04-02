@@ -114,3 +114,9 @@ model StrategicMetric {
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+model GlobalSettings {
+  id             String @id @default("global")
+  currentEbitda  Float  @default(50000000)
+  baseMultiplier Float  @default(6.0)
+}

@@ -68,6 +68,27 @@ export async function toggleMetric(id: string, currentStatus: boolean) {
 }
 
 
+export async function updateGlobalSettings(formData: FormData) {
+  const session = await auth()
+  const email = session?.user?.email
+  if (!email) throw new Error("Nepřihlášen")
+
+  const user = await prisma.user.findUnique({ where: { email } })
+  if (user?.role !== "ADMIN") throw new Error("Přístup odepřen")
+
+  const currentEbitda = parseFloat(formData.get("currentEbitda") as string) || 50000000
+  const baseMultiplier = parseFloat(formData.get("baseMultiplier") as string) || 6.0
+
+  await prisma.globalSettings.upsert({
+    where: { id: "global" },
+    update: { currentEbitda, baseMultiplier },
+    create: { id: "global", currentEbitda, baseMultiplier }
+  })
+
+  revalidatePath("/")
+  revalidatePath("/admin")
+}
+
 // --- 2. SEKCE: ADMIN MANAGEMENT (Správa uživatelů) ---
 
 export async function inviteUser(formData: FormData) {

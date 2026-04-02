@@ -1,6 +1,6 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
-import { inviteUser, removeUser, toggleUserRole } from "@/lib/actions"
+import { inviteUser, removeUser, toggleUserRole, updateGlobalSettings } from "@/lib/actions"
 import Image from "next/image"
 import { redirect } from "next/navigation"
 
@@ -16,11 +16,11 @@ export default async function AdminPage() {
     redirect("/") // Automatický odsun na hlavní stránku, pokud není admin
   }
 
-  // 2. NAČTENÍ SEZNAMU POVOLENÝCH UŽIVATELŮ
-  const allowedUsers = await prisma.user.findMany({
-    where: { isAllowed: true },
-    orderBy: { email: 'asc' }
-  })
+  // 2. NAČTENÍ SEZNAMU POVOLENÝCH UŽIVATELŮ A GLOBÁLNÍHO NASTAVENÍ
+  const [allowedUsers, globalSettings] = await Promise.all([
+    prisma.user.findMany({ where: { isAllowed: true }, orderBy: { email: 'asc' } }),
+    prisma.globalSettings.findUnique({ where: { id: "global" } }),
+  ])
 
   return (
     <div className="min-h-screen bg-slate-50 p-8 font-sans selection:bg-blue-100">
@@ -73,6 +73,24 @@ export default async function AdminPage() {
             </form>
           </div>
           <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-blue-600 rounded-full opacity-10 blur-[100px]"></div>
+        </section>
+
+        {/* GLOBÁLNÍ PARAMETRY MODELU */}
+        <section className="bg-white p-12 rounded-[3.5rem] border border-slate-100 shadow-sm relative overflow-hidden">
+          <h2 className="text-blue-600 text-[11px] font-black uppercase tracking-[0.4em] mb-8 italic">Global Model Parameters</h2>
+          <form action={updateGlobalSettings} className="flex flex-col lg:flex-row gap-6 items-end">
+            <div className="flex-1 space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">Current EBITDA (CZK)</label>
+              <input name="currentEbitda" type="number" step="1" defaultValue={globalSettings?.currentEbitda ?? 50000000} className="w-full bg-slate-50 rounded-2xl px-6 py-4 font-black border-2 border-transparent focus:border-blue-600 focus:bg-white outline-none transition-all text-slate-800 shadow-inner" />
+            </div>
+            <div className="flex-1 space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">Base Multiplier</label>
+              <input name="baseMultiplier" type="number" step="0.1" defaultValue={globalSettings?.baseMultiplier ?? 6.0} className="w-full bg-slate-50 rounded-2xl px-6 py-4 font-black border-2 border-transparent focus:border-blue-600 focus:bg-white outline-none transition-all text-slate-800 shadow-inner" />
+            </div>
+            <button type="submit" className="bg-slate-900 text-white px-10 py-4 rounded-2xl font-black hover:bg-blue-600 transition-all uppercase text-[10px] tracking-[0.2em] shadow-xl active:scale-95 whitespace-nowrap">
+              Update Parameters
+            </button>
+          </form>
         </section>
 
         {/* TABULKA UŽIVATELŮ */}
