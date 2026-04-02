@@ -16,7 +16,11 @@ export default async function AdminPage() {
   }
 
   const [allowedUsers, globalSettings] = await Promise.all([
-    prisma.user.findMany({ where: { isAllowed: true }, orderBy: { email: 'asc' } }),
+    prisma.user.findMany({
+      where: { isAllowed: true },
+      include: { compensation: true },
+      orderBy: { email: 'asc' }
+    }),
     prisma.globalSettings.findUnique({ where: { id: "global" } }),
   ])
 
@@ -30,8 +34,8 @@ export default async function AdminPage() {
             <Image
               src="/algotech-logo.png"
               alt="Algotech"
-              width={140}
-              height={45}
+              width={200}
+              height={58}
               className="object-contain"
             />
             <div className="w-px h-10 bg-brand-cyan/20 hidden md:block"></div>
@@ -79,11 +83,11 @@ export default async function AdminPage() {
           <form action={updateGlobalSettings} className="flex flex-col lg:flex-row gap-6 items-end">
             <div className="flex-1 space-y-2">
               <label className="text-[10px] font-black text-brand-cyan/60 uppercase tracking-widest block ml-1">Current EBITDA (CZK)</label>
-              <input name="currentEbitda" type="number" step="1" defaultValue={globalSettings?.currentEbitda ?? 50000000} className="w-full bg-brand-navy rounded-2xl px-6 py-4 font-black border-2 border-brand-cyan/10 focus:border-brand-cyan focus:bg-brand-navy-deep outline-none transition-all text-white shadow-inner" />
+              <input name="currentEbitda" type="number" step="1" defaultValue={globalSettings?.currentEbitda ?? 50000000} className="w-full bg-brand-navy rounded-2xl px-6 py-4 font-black border-2 border-brand-cyan/10 focus:border-brand-cyan outline-none transition-all text-white shadow-inner" />
             </div>
             <div className="flex-1 space-y-2">
               <label className="text-[10px] font-black text-brand-cyan/60 uppercase tracking-widest block ml-1">Base Multiplier</label>
-              <input name="baseMultiplier" type="number" step="0.1" defaultValue={globalSettings?.baseMultiplier ?? 6.0} className="w-full bg-brand-navy rounded-2xl px-6 py-4 font-black border-2 border-brand-cyan/10 focus:border-brand-cyan focus:bg-brand-navy-deep outline-none transition-all text-white shadow-inner" />
+              <input name="baseMultiplier" type="number" step="0.1" defaultValue={globalSettings?.baseMultiplier ?? 6.0} className="w-full bg-brand-navy rounded-2xl px-6 py-4 font-black border-2 border-brand-cyan/10 focus:border-brand-cyan outline-none transition-all text-white shadow-inner" />
             </div>
             <button type="submit" className="bg-brand-cyan text-brand-navy px-10 py-4 rounded-2xl font-black hover:bg-brand-pink hover:text-white transition-all uppercase text-[10px] tracking-[0.2em] shadow-xl active:scale-95 whitespace-nowrap">
               Update Parameters
@@ -107,13 +111,13 @@ export default async function AdminPage() {
                 <tr className="bg-brand-navy/50 text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">
                   <th className="px-10 py-6">Manager Identity</th>
                   <th className="px-10 py-6">System Role</th>
-                  <th className="px-10 py-6 text-right">Administrative Actions</th>
+                  <th className="px-10 py-6 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-brand-cyan/5">
                 {allowedUsers.map(u => (
                   <tr key={u.id} className="group hover:bg-brand-cyan/5 transition-colors">
-                    <td className="px-10 py-8">
+                    <td className="px-10 py-6">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-full bg-brand-navy flex items-center justify-center font-black text-brand-cyan text-xs border border-brand-cyan/20">
                           {u.name?.charAt(0) || u.email?.charAt(0)}
@@ -124,8 +128,8 @@ export default async function AdminPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-10 py-8 text-center sm:text-left">
-                      <span className={`text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-[0.2em] shadow-sm ${
+                    <td className="px-10 py-6">
+                      <span className={`text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-[0.2em] ${
                         u.role === 'ADMIN'
                           ? 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/30'
                           : 'bg-brand-navy text-white/30 border border-brand-cyan/10'
@@ -133,13 +137,24 @@ export default async function AdminPage() {
                         {u.role}
                       </span>
                     </td>
-                    <td className="px-10 py-8 text-right">
-                      <div className="flex justify-end items-center gap-6">
+                    <td className="px-10 py-6 text-right">
+                      <div className="flex justify-end items-center gap-4">
+                        {/* SPRÁVA ODMĚN */}
+                        <a
+                          href={`/admin/user/${u.id}`}
+                          className="bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20 hover:bg-brand-cyan hover:text-brand-navy transition-all px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest"
+                        >
+                          Manage
+                        </a>
+
+                        {/* PŘEPÍNAČ ROLE */}
                         <form action={toggleUserRole.bind(null, u.id, u.role)}>
                           <button className="text-[10px] font-black text-white/20 hover:text-brand-cyan uppercase tracking-widest transition-colors hover:underline decoration-brand-cyan/30 decoration-2 underline-offset-4">
-                            Change Role
+                            Role
                           </button>
                         </form>
+
+                        {/* ODEBRÁNÍ PŘÍSTUPU */}
                         <form action={removeUser.bind(null, u.id)}>
                           <button className="bg-brand-navy hover:bg-brand-pink/10 text-white/20 hover:text-brand-pink p-3 rounded-xl transition-all border border-transparent hover:border-brand-pink/20">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
@@ -152,6 +167,7 @@ export default async function AdminPage() {
               </tbody>
             </table>
           </div>
+
           {allowedUsers.length === 0 && (
             <div className="p-20 text-center">
               <p className="text-white/20 font-black italic text-sm uppercase tracking-widest">No managers currently authorized.</p>

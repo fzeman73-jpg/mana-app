@@ -1,6 +1,6 @@
 import { auth, signIn, signOut } from "@/auth"
 import { prisma } from "@/lib/db"
-import { updateCompensation, addStrategicMetric, toggleMetric } from "@/lib/actions"
+import { toggleMetric } from "@/lib/actions"
 import { StrategicMetric, Compensation } from "@prisma/client"
 import Image from "next/image"
 
@@ -20,8 +20,8 @@ export default async function Home() {
             <Image
               src="/algotech-logo.png"
               alt="Algotech Logo"
-              width={200}
-              height={60}
+              width={280}
+              height={84}
               priority
               className="opacity-90"
             />
@@ -50,15 +50,11 @@ export default async function Home() {
   try {
     const userData = await prisma.user.findUnique({
       where: { email: userEmail },
-      include: {
-        compensation: true,
-        metrics: true
-      }
+      include: { compensation: true, metrics: true }
     })
-
     if (userData) {
-      comp = userData.compensation
-      metrics = userData.metrics
+      comp     = userData.compensation
+      metrics  = userData.metrics
       userRole = userData.role
     }
   } catch (error) {
@@ -66,30 +62,29 @@ export default async function Home() {
   }
 
   // 3. GLOBÁLNÍ NASTAVENÍ + VÝPOČETNÍ LOGIKA
-  const globalSettings = await prisma.globalSettings.findUnique({ where: { id: "global" } })
-  const currentEbitda = globalSettings?.currentEbitda ?? 50000000
-  const baseMultiplier = globalSettings?.baseMultiplier ?? 6.0
-  const bonusMultiplier = metrics.filter(m => m.isCompleted).reduce((sum, m) => sum + m.multiplierImpact, 0)
+  const globalSettings    = await prisma.globalSettings.findUnique({ where: { id: "global" } })
+  const currentEbitda     = globalSettings?.currentEbitda  ?? 50000000
+  const baseMultiplier    = globalSettings?.baseMultiplier ?? 6.0
+  const bonusMultiplier   = metrics.filter(m => m.isCompleted).reduce((sum, m) => sum + m.multiplierImpact, 0)
   const effectiveMultiplier = baseMultiplier + bonusMultiplier
-  const currentVal = currentEbitda * effectiveMultiplier
-  const grantVal = (comp?.grantEbitda || 0) * (comp?.grantMultiplier || 0)
-  const popPayout = Math.max(0, (currentVal - grantVal) * ((comp?.popUnits || 0) / 100))
+  const currentVal        = currentEbitda * effectiveMultiplier
+  const grantVal          = (comp?.grantEbitda || 0) * (comp?.grantMultiplier || 0)
+  const popPayout         = Math.max(0, (currentVal - grantVal) * ((comp?.popUnits || 0) / 100))
 
   return (
     <div className="min-h-screen bg-brand-navy text-white font-sans selection:bg-brand-cyan/20">
 
       {/* NAVBAR */}
       <nav className="bg-brand-navy/90 backdrop-blur-md border-b border-brand-cyan/10 px-8 py-4 flex justify-between items-center sticky top-0 z-30 shadow-lg">
-
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <Image
             src="/algotech-logo.png"
             alt="Algotech"
-            width={120}
-            height={35}
+            width={200}
+            height={58}
             className="object-contain"
           />
-          <span className="w-px h-6 bg-brand-cyan/20 ml-2"></span>
+          <span className="w-px h-6 bg-brand-cyan/20 ml-1"></span>
           <span className="text-[10px] font-black text-brand-cyan/40 uppercase tracking-widest italic">Cockpit</span>
         </div>
 
@@ -123,50 +118,54 @@ export default async function Home() {
 
       <main className="max-w-6xl mx-auto py-12 px-6 grid grid-cols-1 lg:grid-cols-3 gap-12">
 
-        {/* LEVÝ SLOUP: PARAMETRY */}
+        {/* LEVÝ SLOUP: PŘEHLED ODMĚNY (READ-ONLY) */}
         <div className="lg:col-span-1 space-y-8">
           <section className="bg-brand-navy-card p-8 rounded-[2.5rem] shadow-lg border border-brand-cyan/10 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-2 h-full bg-brand-cyan opacity-20"></div>
-            <h2 className="font-black text-white text-xl mb-8 tracking-tight uppercase italic underline decoration-brand-cyan decoration-4 underline-offset-8">Data Entry</h2>
+            <h2 className="font-black text-white text-xl mb-8 tracking-tight uppercase italic underline decoration-brand-cyan decoration-4 underline-offset-8">Compensation</h2>
 
-            <form action={updateCompensation} className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-brand-cyan/60 uppercase tracking-widest block ml-1">Monthly Base (CZK)</label>
-                <input name="baseSalary" type="number" step="0.01" defaultValue={comp?.baseSalary || 0} className="w-full bg-brand-navy rounded-2xl px-6 py-4 font-black border-2 border-brand-cyan/10 focus:border-brand-cyan focus:bg-brand-navy-deep outline-none transition-all text-white shadow-inner" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-brand-cyan/60 uppercase tracking-widest block ml-1">Annual Bonus Target (CZK)</label>
-                <input name="targetBonusAnnual" type="number" step="0.01" defaultValue={comp?.targetBonusAnnual || 0} className="w-full bg-brand-navy rounded-2xl px-6 py-4 font-black border-2 border-brand-cyan/10 focus:border-brand-cyan focus:bg-brand-navy-deep outline-none transition-all text-white shadow-inner" />
-              </div>
+            {comp ? (
+              <div className="space-y-4">
+                <div className="bg-brand-navy rounded-2xl px-6 py-4 border border-brand-cyan/10">
+                  <p className="text-[10px] font-black text-brand-cyan/60 uppercase tracking-widest mb-1">Monthly Base (CZK)</p>
+                  <p className="font-black text-white text-lg">{Intl.NumberFormat('cs-CZ').format(comp.baseSalary)}</p>
+                </div>
+                <div className="bg-brand-navy rounded-2xl px-6 py-4 border border-brand-cyan/10">
+                  <p className="text-[10px] font-black text-brand-cyan/60 uppercase tracking-widest mb-1">Annual Bonus Target (CZK)</p>
+                  <p className="font-black text-white text-lg">{Intl.NumberFormat('cs-CZ').format(comp.targetBonusAnnual)}</p>
+                </div>
 
-              <div className="pt-8 mt-8 border-t-2 border-brand-cyan/10">
-                <p className="text-[10px] font-black text-brand-cyan uppercase tracking-[0.3em] mb-6 text-center italic">POP Configuration</p>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center bg-brand-navy-deep p-4 rounded-2xl text-white shadow-xl border border-brand-cyan/10">
-                    <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Share %</label>
-                    <input name="popUnits" type="number" step="0.01" defaultValue={comp?.popUnits || 0} className="font-black w-16 text-right bg-transparent outline-none text-brand-cyan text-lg" />
-                  </div>
-                  <div className="flex justify-between items-center bg-brand-navy p-4 rounded-2xl border border-brand-cyan/10">
-                    <label className="text-[10px] font-bold text-white/40 uppercase">Grant EBITDA</label>
-                    <input name="grantEbitda" type="number" step="0.01" defaultValue={comp?.grantEbitda || 0} className="font-black w-28 text-right bg-transparent outline-none text-white" />
-                  </div>
-                  <div className="flex justify-between items-center bg-brand-navy p-4 rounded-2xl border border-brand-cyan/10">
-                    <label className="text-[10px] font-bold text-white/40 uppercase">Grant Multiplier</label>
-                    <input name="grantMultiplier" type="number" step="0.01" defaultValue={comp?.grantMultiplier || 0} className="font-black w-16 text-right bg-transparent outline-none text-white" />
+                <div className="pt-6 mt-6 border-t border-brand-cyan/10">
+                  <p className="text-[10px] font-black text-brand-cyan uppercase tracking-[0.3em] mb-4 text-center italic">POP Configuration</p>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center bg-brand-navy-deep p-4 rounded-2xl border border-brand-cyan/10">
+                      <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Share %</span>
+                      <span className="font-black text-brand-cyan text-lg">{comp.popUnits}%</span>
+                    </div>
+                    <div className="flex justify-between items-center bg-brand-navy p-4 rounded-2xl border border-brand-cyan/10">
+                      <span className="text-[10px] font-bold text-white/40 uppercase">Grant EBITDA</span>
+                      <span className="font-black text-white">{Intl.NumberFormat('cs-CZ').format(comp.grantEbitda)}</span>
+                    </div>
+                    <div className="flex justify-between items-center bg-brand-navy p-4 rounded-2xl border border-brand-cyan/10">
+                      <span className="text-[10px] font-bold text-white/40 uppercase">Grant Multiplier</span>
+                      <span className="font-black text-white">{comp.grantMultiplier}x</span>
+                    </div>
                   </div>
                 </div>
               </div>
-
-              <button type="submit" className="w-full bg-brand-cyan text-brand-navy py-5 rounded-2xl font-black hover:bg-brand-pink hover:text-white transition-all shadow-2xl active:scale-95 uppercase tracking-[0.2em] text-[10px] mt-6">
-                Update Model
-              </button>
-            </form>
+            ) : (
+              <div className="py-12 text-center border-4 border-dotted border-brand-cyan/10 rounded-[2rem]">
+                <p className="text-white/20 font-black italic text-sm uppercase tracking-widest">Odměna zatím nebyla nastavena.</p>
+                <p className="text-white/10 text-xs mt-2">Kontaktujte administrátora.</p>
+              </div>
+            )}
           </section>
         </div>
 
         {/* PRAVÝ SLOUP: DASHBOARD */}
         <div className="lg:col-span-2 space-y-12">
 
+          {/* PHANTOM CAPITAL GAIN */}
           <div className="bg-brand-navy-deep rounded-[3.5rem] p-12 text-white shadow-2xl relative overflow-hidden ring-1 ring-brand-cyan/10">
             <div className="relative z-10">
               <header className="flex justify-between items-start mb-12">
@@ -199,24 +198,16 @@ export default async function Home() {
             <div className="absolute -left-20 -bottom-20 w-[300px] h-[300px] bg-brand-pink rounded-full opacity-5 blur-[100px]"></div>
           </div>
 
-          {/* MILNÍKY */}
+          {/* STRATEGICKÉ BOOSTERY */}
           <div className="bg-brand-navy-card p-12 rounded-[3rem] border border-brand-cyan/10 shadow-lg relative overflow-hidden">
             <header className="flex justify-between items-center mb-12 border-b border-brand-cyan/10 pb-8">
               <h2 className="font-black text-white text-2xl tracking-tight uppercase italic underline decoration-brand-cyan decoration-4 underline-offset-8">Strategické <span className="text-brand-cyan font-black">Boostery</span></h2>
               <div className="text-[10px] font-black text-white/20 tracking-[0.3em] uppercase">Impact Board</div>
             </header>
 
-            <form action={addStrategicMetric} className="flex flex-col sm:flex-row gap-4 mb-12 bg-brand-navy p-4 rounded-3xl border border-brand-cyan/10 shadow-inner">
-              <input name="name" placeholder="Pojmenujte strategický cíl (např. Expanze EU)..." className="flex-1 bg-transparent px-6 py-3 outline-none font-bold text-sm text-white placeholder:text-white/20" required />
-              <div className="flex gap-2">
-                <input name="multiplierImpact" type="number" step="0.1" placeholder="+0.2" className="w-24 bg-brand-navy-card rounded-2xl px-4 py-3 text-center font-black shadow-sm text-brand-cyan outline-none border-2 border-brand-cyan/20 focus:border-brand-cyan transition-all" required />
-                <button type="submit" className="bg-brand-cyan text-brand-navy px-8 py-3 rounded-2xl font-black hover:bg-brand-pink hover:text-white transition-all text-[10px] uppercase tracking-widest active:scale-95 shadow-xl">Boost</button>
-              </div>
-            </form>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {metrics.length === 0 ? (
-                <div className="col-span-2 text-center text-white/20 py-16 font-bold text-sm italic border-4 border-dotted border-brand-cyan/10 rounded-[3rem]">Zatím nebyly definovány žádné multiplikační úkoly.</div>
+                <div className="col-span-2 text-center text-white/20 py-16 font-bold text-sm italic border-4 border-dotted border-brand-cyan/10 rounded-[3rem]">Zatím nebyly definovány žádné strategické cíle.</div>
               ) : (
                 metrics.map((m) => (
                   <div key={m.id} className={`flex items-center justify-between p-6 rounded-[2rem] border-2 transition-all ${m.isCompleted ? 'bg-brand-green/10 border-brand-green/20' : 'bg-brand-navy border-brand-cyan/10 hover:border-brand-cyan/30 group'}`}>
