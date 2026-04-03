@@ -70,7 +70,6 @@ export default async function Home() {
   let comp: Compensation | null = null
   let kpiTasks: KpiTask[] = []
   let userRole = "MANAGER"
-  let userId = ""
 
   const activePeriod = await prisma.period.findFirst({ where: { isActive: true } })
 
@@ -88,7 +87,6 @@ export default async function Home() {
       comp     = userData.compensations[0] ?? null
       kpiTasks = userData.kpiTasks
       userRole = userData.role
-      userId   = userData.id
     }
   } catch (e) { console.error(e) }
 
@@ -319,7 +317,7 @@ export default async function Home() {
                     <div className="flex items-center gap-3">
                       <span className="text-[9px] font-black text-brand-cyan bg-gray-100 px-3 py-1 rounded-full border border-gray-200">{t.weight}%</span>
                       {(isAdmin || isManager) ? (
-                        <form action={adminToggleKpiTask.bind(null, t.id, t.isCompleted, userId)}>
+                        <form action={adminToggleKpiTask.bind(null, t.id, t.isCompleted)}>
                           <button className={`text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wider border transition-all ${t.isCompleted ? 'border-brand-green/30 text-brand-green hover:bg-brand-green/20' : 'border-gray-200 text-gray-400 hover:border-brand-cyan hover:text-brand-cyan'}`}>
                             {t.isCompleted ? 'Splněno' : 'Čeká'}
                           </button>
