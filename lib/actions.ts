@@ -34,9 +34,9 @@ export async function loginWithCredentials(formData: FormData) {
   })
 }
 
-// --- ADMIN + MANAGER: Firemní parametry ---
+// --- ADMIN + MANAGER: Firemní parametry (per období) ---
 
-export async function updateCompanyParameters(formData: FormData) {
+export async function updateCompanyParameters(periodId: string, formData: FormData) {
   await requireAdminOrManager()
 
   const data = {
@@ -48,18 +48,18 @@ export async function updateCompanyParameters(formData: FormData) {
   }
 
   await prisma.companyParameters.upsert({
-    where:  { id: "global" },
+    where:  { periodId },
     update: data,
-    create: { id: "global", ...data },
+    create: { periodId, ...data },
   })
 
-  revalidatePath("/")
   revalidatePath("/admin/parameters")
+  revalidatePath("/")
 }
 
-// --- ADMIN: Správa odměn jednotlivého manažera ---
+// --- ADMIN: Odměna uživatele (per uživatel + období) ---
 
-export async function adminSetCompensation(userId: string, formData: FormData) {
+export async function adminSetCompensation(userId: string, periodId: string, formData: FormData) {
   await requireAdmin()
 
   const grantDateRaw = formData.get("grantDate") as string
@@ -79,46 +79,73 @@ export async function adminSetCompensation(userId: string, formData: FormData) {
   }
 
   await prisma.compensation.upsert({
-    where:  { userId },
+    where:  { userId_periodId: { userId, periodId } },
     update: data,
-    create: { userId, ...data },
+    create: { userId, periodId, ...data },
   })
 
-  revalidatePath(`/admin/user/${userId}`)
+  revalidatePath("/admin/parameters")
   revalidatePath("/")
 }
 
-// --- ADMIN: KPI úkoly manažera ---
+// --- ADMIN: KPI úkoly (per uživatel + období) ---
 
-export async function adminAddKpiTask(userId: string, formData: FormData) {
+export async function adminAddKpiTask(userId: string, periodId: string, formData: FormData) {
   await requireAdmin()
 
   const name   = formData.get("name") as string
   const weight = parseFloat(formData.get("weight") as string) || 0
 
   await prisma.kpiTask.create({
-    data: { name, weight, userId },
+    data: { name, weight, userId, periodId },
   })
 
-  revalidatePath(`/admin/user/${userId}`)
+  revalidatePath("/admin/parameters")
 }
 
-export async function adminDeleteKpiTask(taskId: string, userId: string) {
+export async function adminDeleteKpiTask(taskId: string) {
   await requireAdmin()
   await prisma.kpiTask.delete({ where: { id: taskId } })
-  revalidatePath(`/admin/user/${userId}`)
+  revalidatePath("/admin/parameters")
 }
 
-// --- ADMIN + MANAGER: Označení KPI úkolu ---
+// --- ADMIN + MANAGER: Toggle KPI ---
 
-export async function adminToggleKpiTask(taskId: string, current: boolean, userId: string) {
+export async function adminToggleKpiTask(taskId: string, current: boolean) {
   await requireAdminOrManager()
   await prisma.kpiTask.update({
     where: { id: taskId },
     data:  { isCompleted: !current },
   })
-  revalidatePath(`/admin/user/${userId}`)
+  revalidatePath("/admin/parameters")
   revalidatePath("/")
+}
+
+// --- ADMIN: Správa období ---
+
+export async function createPeriod(formData: FormData) {
+  await requireAdmin()
+  const name      = formData.get("name") as string
+  const startDate = new Date(formData.get("startDate") as string)
+  const endDate   = new Date(formData.get("endDate") as string)
+
+  await prisma.period.create({ data: { name, startDate, endDate } })
+  revalidatePath("/admin/parameters")
+}
+
+export async function setActivePeriod(periodId: string) {
+  await requireAdminOrManager()
+  await prisma.period.updateMany({ data: { isActive: false } })
+  await prisma.period.update({ where: { id: periodId }, data: { isActive: true } })
+  revalidatePath("/admin/parameters")
+  revalidatePath("/")
+}
+
+export async function deletePeriod(periodId: string) {
+  await requireAdmin()
+  await prisma.period.delete({ where: { id: periodId } })
+  revalidatePath("/admin/parameters")
+  redirect("/admin/parameters")
 }
 
 // --- ADMIN: Správa uživatelů ---
@@ -167,18 +194,6 @@ export async function setUserPassword(userId: string, formData: FormData) {
   revalidatePath(`/admin/user/${userId}`)
 }
 
-// --- Legacy (zachováno pro kompatibilitu) ---
-
 export async function removeUser(userId: string) {
   await setUserActive(userId, false)
-}
-
-export async function toggleUserRole(userId: string, currentRole: string) {
-  await requireAdmin()
-  const next: Record<string, "USER" | "MANAGER" | "ADMIN"> = {
-    USER: "MANAGER", MANAGER: "ADMIN", ADMIN: "USER",
-  }
-  await prisma.user.update({ where: { id: userId }, data: { role: next[currentRole] ?? "USER" } })
-  revalidatePath("/admin")
-  revalidatePath("/")
 }

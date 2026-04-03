@@ -72,20 +72,29 @@ export default async function Home() {
   let userRole = "MANAGER"
   let userId = ""
 
+  const activePeriod = await prisma.period.findFirst({ where: { isActive: true } })
+
   try {
     const userData = await prisma.user.findUnique({
       where: { email: session.user.email },
-      include: { compensation: true, kpiTasks: { orderBy: { name: "asc" } } },
+      include: {
+        compensations: activePeriod ? { where: { periodId: activePeriod.id } } : { take: 0 },
+        kpiTasks: activePeriod
+          ? { where: { periodId: activePeriod.id }, orderBy: { name: "asc" } }
+          : { take: 0 },
+      },
     })
     if (userData) {
-      comp     = userData.compensation
+      comp     = userData.compensations[0] ?? null
       kpiTasks = userData.kpiTasks
       userRole = userData.role
       userId   = userData.id
     }
   } catch (e) { console.error(e) }
 
-  const params = await prisma.companyParameters.findUnique({ where: { id: "global" } })
+  const params = activePeriod
+    ? await prisma.companyParameters.findUnique({ where: { periodId: activePeriod.id } })
+    : null
 
   const company: CompanyParams = {
     currentEbitda:     params?.currentEbitda     ?? 0,

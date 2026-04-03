@@ -98,6 +98,9 @@ export default async function AdminPage() {
                         <a href={`/admin/user/${u.id}`} className="bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20 hover:bg-brand-cyan hover:text-brand-navy transition-all px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">
                           Nastavení
                         </a>
+                        <a href={`/admin/parameters?userId=${u.id}`} className="bg-brand-pink/10 text-brand-pink border border-brand-pink/20 hover:bg-brand-pink hover:text-white transition-all px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">
+                          Parametry
+                        </a>
                         <form action={removeUser.bind(null, u.id)}>
                           <button className="bg-gray-100 hover:bg-brand-pink/10 text-gray-400 hover:text-brand-pink p-2.5 rounded-xl transition-all border border-transparent hover:border-brand-pink/20">
                             <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>

@@ -25,7 +25,7 @@ model User {
 
   accounts      Account[]
   sessions      Session[]
-  compensation  Compensation?
+  compensations Compensation[]
   kpiTasks      KpiTask[]
 
   createdAt     DateTime  @default(now())
@@ -67,54 +67,68 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// --- FIREMNÍ PARAMETRY (globální, sdílené) ---
+// --- ČASOVÉ OBDOBÍ ---
+
+model Period {
+  id        String   @id @default(cuid())
+  name      String                        // např. "Rok 2025", "Q1 2025"
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean  @default(false)
+
+  companyParams CompanyParameters?
+  compensations Compensation[]
+  kpiTasks      KpiTask[]
+}
+
+// --- FIREMNÍ PARAMETRY (per období) ---
 
 model CompanyParameters {
-  id                String @id @default("global")
+  id                String @id @default(cuid())
+  periodId          String @unique
+  period            Period @relation(fields: [periodId], references: [id], onDelete: Cascade)
 
-  // Roční cílová odměna – vstupy
   currentEbitda     Float  @default(0)
   targetEbitda      Float  @default(0)
   currentHorizont   Float  @default(0)
   targetHorizont    Float  @default(0)
-
-  // Phantom Option Plan – aktuální multiplier (admin mění dle výsledků)
   currentMultiplier Float  @default(6.0)
 }
 
-// --- ODMĚNA MANAŽERA ---
+// --- ODMĚNA MANAŽERA (per uživatel + období) ---
 
 model Compensation {
   id                  String   @id @default(cuid())
-  userId              String   @unique
+  userId              String
+  periodId            String
 
-  // Základní plat
-  baseSalary          Float    @default(0)   // měsíční, CZK
-
-  // Roční cílová odměna
-  targetBonusAnnual   Float    @default(0)   // celková cílová odměna, CZK/rok
-  bonusWeightEbitda   Float    @default(33)  // % složka závislá na EBITDA
-  bonusWeightHorizont Float    @default(33)  // % složka závislá na HORIZONTu
-  bonusWeightKpi      Float    @default(34)  // % složka závislá na KPI úkolech
-
-  // Phantom Option Plan
-  sharePercent        Float    @default(0)   // podíl v % z vytvořené hodnoty
-  grantEbitda         Float    @default(0)   // EBITDA při vstupu do POP
-  grantMultiplier     Float    @default(0)   // multiplier při vstupu do POP
-  vestingYears        Int      @default(3)   // délka POP v letech
+  baseSalary          Float    @default(0)
+  targetBonusAnnual   Float    @default(0)
+  bonusWeightEbitda   Float    @default(33)
+  bonusWeightHorizont Float    @default(33)
+  bonusWeightKpi      Float    @default(34)
+  sharePercent        Float    @default(0)
+  grantEbitda         Float    @default(0)
+  grantMultiplier     Float    @default(0)
+  vestingYears        Int      @default(3)
   grantDate           DateTime @default(now())
 
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  period Period @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, periodId])
 }
 
-// --- KPI ÚKOLY MANAŽERA ---
+// --- KPI ÚKOLY (per uživatel + období) ---
 
 model KpiTask {
   id          String  @id @default(cuid())
   userId      String
+  periodId    String
   name        String
-  weight      Float   @default(0)    // váha v rámci KPI složky (součet = 100%)
+  weight      Float   @default(0)
   isCompleted Boolean @default(false)
 
-  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  period      Period @relation(fields: [periodId], references: [id], onDelete: Cascade)
 }
