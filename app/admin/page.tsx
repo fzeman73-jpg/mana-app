@@ -12,7 +12,6 @@ export default async function AdminPage() {
 
   const allowedUsers = await prisma.user.findMany({
     where: { isAllowed: true },
-    include: { compensation: true },
     orderBy: { email: "asc" },
   })
 
@@ -72,7 +71,6 @@ export default async function AdminPage() {
                 <tr className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
                   <th className="px-8 py-5">Uživatel</th>
                   <th className="px-8 py-5">Úroveň</th>
-                  <th className="px-8 py-5">Odměna</th>
                   <th className="px-8 py-5 text-right">Akce</th>
                 </tr>
               </thead>
@@ -95,17 +93,7 @@ export default async function AdminPage() {
                         {u.role}
                       </span>
                     </td>
-                    <td className="px-8 py-6">
-                      {u.compensation ? (
-                        <div>
-                          <p className="text-gray-900 text-xs font-black">{Intl.NumberFormat('cs-CZ').format(u.compensation.baseSalary)} CZK</p>
-                          <p className="text-gray-400 text-[10px]">bonus cíl: {Intl.NumberFormat('cs-CZ').format(u.compensation.targetBonusAnnual)} CZK</p>
-                        </div>
-                      ) : (
-                        <span className="text-[10px] text-brand-pink/70 font-black uppercase tracking-wider">Nenastaveno</span>
-                      )}
-                    </td>
-                    <td className="px-8 py-6 text-right">
+<td className="px-8 py-6 text-right">
                       <div className="flex justify-end items-center gap-3">
                         <a href={`/admin/user/${u.id}`} className="bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20 hover:bg-brand-cyan hover:text-brand-navy transition-all px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">
                           Nastavení
