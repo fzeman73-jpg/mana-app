@@ -104,6 +104,27 @@ export async function setUserPassword(userId: string, formData: FormData) {
   revalidatePath(`/admin/user/${userId}`)
 }
 
+export async function changeOwnPassword(formData: FormData) {
+  const caller = await getCallerOrThrow()
+  const current  = formData.get("current")  as string
+  const password = formData.get("password")  as string
+  const confirm  = formData.get("confirm")   as string
+
+  if (!password || password.length < 6) throw new Error("Nové heslo musí mít alespoň 6 znaků")
+  if (password !== confirm) throw new Error("Hesla se neshodují")
+
+  // Ověření stávajícího hesla (pokud má nastavené)
+  if (caller.password) {
+    const ok = await bcrypt.compare(current, caller.password)
+    if (!ok) throw new Error("Stávající heslo není správné")
+  }
+
+  const hashed = await bcrypt.hash(password, 12)
+  await prisma.user.update({ where: { id: caller.id }, data: { password: hashed } })
+  await audit(caller.email!, "CHANGE_OWN_PASSWORD", `User:${caller.id}`)
+  revalidatePath("/settings")
+}
+
 export async function setUserDivision(userId: string, formData: FormData) {
   const caller = await requireAdmin()
   const divisionId = formData.get("divisionId") as string | null
