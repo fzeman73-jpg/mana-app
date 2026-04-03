@@ -2,197 +2,426 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
 import {
   createPeriod, deletePeriod, setActivePeriod,
-  updateCompanyParameters, adminSetCompensation,
-  adminAddKpiTask, adminDeleteKpiTask,
+  createPerformanceParameter, updatePerformanceParameter, deletePerformanceParameter,
+  upsertQuarterlyResult, lockQuarter,
+  upsertVestingBase, createBooster, toggleBooster, deleteBooster,
+  adminSetCompensation, adminAddKpiTask, adminDeleteKpiTask,
 } from "@/lib/actions"
 import Image from "next/image"
 import { redirect } from "next/navigation"
 
-const fmt = (n: number) => Intl.NumberFormat('cs-CZ').format(Math.round(n))
+const fmt  = (n: number) => Intl.NumberFormat('cs-CZ').format(Math.round(n))
+const pct  = (n: number) => `${n}%`
 
 export default async function ParametersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodId?: string; userId?: string }>
+  searchParams: Promise<{ periodId?: string; userId?: string; tab?: string }>
 }) {
   const session = await auth()
-  const caller = await prisma.user.findUnique({ where: { email: session?.user?.email || "" } })
+  const caller  = await prisma.user.findUnique({ where: { email: session?.user?.email || "" } })
   if (caller?.role !== "ADMIN" && caller?.role !== "MANAGER") redirect("/")
   const isAdmin = caller?.role === "ADMIN"
 
-  const { periodId, userId } = await searchParams
+  const { periodId, userId, tab = "firma" } = await searchParams
 
   const [periods, users] = await Promise.all([
     prisma.period.findMany({ orderBy: { startDate: "desc" } }),
     prisma.user.findMany({ where: { isAllowed: true }, orderBy: { name: "asc" } }),
   ])
 
-  const selectedPeriod = periods.find(p => p.id === periodId) ?? null
-  const selectedUser   = users.find(u => u.id === userId) ?? null
+  const sel  = periods.find(p => p.id === periodId) ?? null
+  const selU = users.find(u => u.id === userId) ?? null
 
-  // Načtení dat pro vybrané období
-  const [companyParams, allCompensations] = await Promise.all([
-    selectedPeriod
-      ? prisma.companyParameters.findUnique({ where: { periodId: selectedPeriod.id } })
-      : null,
-    selectedPeriod
-      ? prisma.compensation.findMany({ where: { periodId: selectedPeriod.id } })
-      : [],
-  ])
+  // Data pro vybrané období
+  const [perfParams, vestingBase, boosters] = sel ? await Promise.all([
+    prisma.performanceParameter.findMany({
+      where:   { periodId: sel.id },
+      include: { results: { orderBy: { year: "asc" } } },
+      orderBy: { sortOrder: "asc" },
+    }),
+    prisma.vestingBase.findUnique({ where: { periodId: sel.id } }),
+    prisma.strategicBooster.findMany({ where: { periodId: sel.id }, orderBy: { name: "asc" } }),
+  ]) : [[], null, []]
 
-  const compensation = selectedPeriod && selectedUser
-    ? allCompensations.find(c => c.userId === selectedUser.id) ?? null
-    : null
+  // Data pro vybraného uživatele + období
+  const [compensation, kpiTasks, allCompensations] = (sel && selU) ? await Promise.all([
+    prisma.compensation.findUnique({ where: { userId_periodId: { userId: selU.id, periodId: sel.id } } }),
+    prisma.kpiTask.findMany({ where: { userId: selU.id, periodId: sel.id }, orderBy: { name: "asc" } }),
+    prisma.compensation.findMany({ where: { periodId: sel.id }, select: { userId: true } }),
+  ]) : [null, [], sel ? await prisma.compensation.findMany({ where: { periodId: sel.id }, select: { userId: true } }) : []]
 
-  const kpiTasks = selectedPeriod && selectedUser
-    ? await prisma.kpiTask.findMany({
-        where: { userId: selectedUser.id, periodId: selectedPeriod.id },
-        orderBy: { name: "asc" },
-      })
-    : []
+  const now   = new Date()
+  const curQ  = Math.ceil((now.getMonth() + 1) / 3)
+  const curY  = now.getFullYear()
 
-  const periodUrl = (pid: string) => `/admin/parameters?periodId=${pid}${userId ? `&userId=${userId}` : ''}`
-  const userUrl   = (uid: string) => `/admin/parameters?periodId=${periodId}&userId=${uid}`
+  const href = (params: Record<string, string | undefined>) => {
+    const base: Record<string, string> = {}
+    if (periodId) base.periodId = periodId
+    if (userId)   base.userId   = userId
+    if (tab)      base.tab      = tab
+    Object.assign(base, params)
+    return `/admin/parameters?${new URLSearchParams(Object.fromEntries(Object.entries(base).filter(([,v]) => v))).toString()}`
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans selection:bg-brand-cyan/20">
 
       {/* HLAVIČKA */}
-      <header className="bg-white border-b border-gray-100 px-8 py-5 flex justify-between items-center sticky top-0 z-10 shadow-sm">
-        <div className="flex items-center gap-5">
-          <a href="/"><Image src="/algotech-logo.png" alt="Algotech" width={140} height={40} className="object-contain" /></a>
-          <div className="w-px h-8 bg-gray-200" />
+      <header className="bg-white border-b border-gray-100 px-8 py-4 flex justify-between items-center sticky top-0 z-20 shadow-sm">
+        <div className="flex items-center gap-4">
+          <a href="/"><Image src="/algotech-logo.png" alt="Algotech" width={130} height={38} className="object-contain" /></a>
+          <div className="w-px h-7 bg-gray-200" />
           <div>
-            <h1 className="text-base font-black italic uppercase tracking-tight text-gray-900">
+            <h1 className="text-sm font-black italic uppercase tracking-tight text-gray-900">
               <span className="text-brand-pink">Parametry</span>
             </h1>
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Firemní metriky a odměny manažerů</p>
+            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Firemní metriky · Odměny · POP</p>
           </div>
         </div>
-        {isAdmin && (
-          <a href="/admin" className="bg-brand-cyan text-brand-navy px-5 py-2.5 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-pink hover:text-white transition-all">
-            ← Správa uživatelů
-          </a>
-        )}
+        <div className="flex items-center gap-3">
+          {sel && (
+            <>
+              <a href={href({ tab: "firma" })} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${tab === "firma" ? "bg-brand-cyan text-brand-navy" : "text-gray-500 hover:text-brand-cyan"}`}>
+                Firma
+              </a>
+              <a href={href({ tab: "manageri" })} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${tab === "manageri" ? "bg-brand-cyan text-brand-navy" : "text-gray-500 hover:text-brand-cyan"}`}>
+                Manažeři
+              </a>
+            </>
+          )}
+          {isAdmin && (
+            <a href="/admin" className="bg-gray-100 text-gray-600 px-4 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-pink hover:text-white transition-all ml-2">
+              ← Uživatelé
+            </a>
+          )}
+        </div>
       </header>
 
-      <div className="max-w-6xl mx-auto p-8 space-y-8">
+      <div className="max-w-6xl mx-auto p-8 space-y-6">
 
-        {/* OBDOBÍ */}
-        <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
+        {/* ── OBDOBÍ ─────────────────────────────────────────────────────── */}
+        <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
             <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic">Časové období</h2>
-            {selectedPeriod && (
-              <span className="text-[10px] font-black text-brand-cyan bg-brand-cyan/10 px-3 py-1 rounded-full border border-brand-cyan/20">
-                Vybráno: {selectedPeriod.name}
-              </span>
-            )}
+            {sel && <span className="text-[10px] font-black text-white bg-brand-cyan px-3 py-1 rounded-full">{sel.name}</span>}
           </div>
 
-          {periods.length > 0 ? (
-            <div className="flex flex-wrap gap-3 mb-6">
-              {periods.map(p => (
-                <div key={p.id} className={`rounded-2xl border transition-all overflow-hidden ${
-                  selectedPeriod?.id === p.id
-                    ? 'border-brand-cyan ring-2 ring-brand-cyan/20'
-                    : 'border-gray-200'
-                }`}>
-                  <a href={periodUrl(p.id)} className={`flex items-center gap-3 px-5 py-3 block ${selectedPeriod?.id === p.id ? 'bg-brand-cyan/5' : 'hover:bg-gray-50'}`}>
-                    <div>
-                      <p className="font-black text-gray-900 text-sm">{p.name}</p>
-                      <p className="text-[10px] text-gray-400">
-                        {new Date(p.startDate).toLocaleDateString('cs-CZ')} – {new Date(p.endDate).toLocaleDateString('cs-CZ')}
-                      </p>
-                    </div>
-                    {p.isActive && <span className="text-[8px] font-black bg-brand-green/20 text-brand-green px-2 py-0.5 rounded-full uppercase tracking-widest ml-2">Aktivní</span>}
-                  </a>
-                  <div className="flex gap-3 px-5 py-2 border-t border-gray-100 bg-gray-50">
-                    {!p.isActive && (
-                      <form action={setActivePeriod.bind(null, p.id)}>
-                        <button type="submit" className="text-[9px] font-black text-gray-400 hover:text-brand-green transition-colors uppercase tracking-wider">Aktivovat</button>
-                      </form>
-                    )}
-                    {isAdmin && (
-                      <form action={deletePeriod.bind(null, p.id)} className="ml-auto">
-                        <button type="submit" className="text-[9px] font-black text-gray-300 hover:text-brand-pink transition-colors uppercase tracking-wider">Smazat</button>
-                      </form>
-                    )}
+          <div className="flex flex-wrap gap-3 mb-4">
+            {periods.map(p => (
+              <div key={p.id} className={`rounded-2xl border transition-all ${sel?.id === p.id ? "border-brand-cyan ring-2 ring-brand-cyan/20" : "border-gray-200"}`}>
+                <a href={href({ periodId: p.id, userId: undefined })}
+                  className={`flex items-center gap-3 px-4 py-3 block ${sel?.id === p.id ? "bg-brand-cyan/5" : "hover:bg-gray-50"}`}>
+                  <div>
+                    <p className="font-black text-gray-900 text-sm">{p.name}</p>
+                    <p className="text-[10px] text-gray-400">{new Date(p.startDate).toLocaleDateString('cs-CZ')} – {new Date(p.endDate).toLocaleDateString('cs-CZ')}</p>
                   </div>
+                  {p.isActive && <span className="text-[8px] font-black bg-brand-green/20 text-brand-green px-2 py-0.5 rounded-full uppercase ml-1">Aktivní</span>}
+                </a>
+                <div className="flex gap-3 px-4 py-2 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+                  {!p.isActive && (
+                    <form action={setActivePeriod.bind(null, p.id)}>
+                      <button className="text-[9px] font-black text-gray-400 hover:text-brand-green transition-colors uppercase tracking-wider">Aktivovat</button>
+                    </form>
+                  )}
+                  {isAdmin && (
+                    <form action={deletePeriod.bind(null, p.id)} className="ml-auto">
+                      <button className="text-[9px] font-black text-gray-300 hover:text-brand-pink transition-colors uppercase tracking-wider">Smazat</button>
+                    </form>
+                  )}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-400 text-sm italic mb-6">Zatím žádná období — vytvořte první.</p>
-          )}
+              </div>
+            ))}
+            {periods.length === 0 && <p className="text-gray-400 text-sm italic">Zatím žádná období.</p>}
+          </div>
 
           {isAdmin && (
-            <form action={createPeriod} className="flex flex-col sm:flex-row gap-3 pt-5 border-t border-gray-100">
-              <input name="name" placeholder="Název (např. Rok 2025)" required
-                className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900" />
-              <input name="startDate" type="date" required
-                className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900" />
-              <input name="endDate" type="date" required
-                className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900" />
-              <button type="submit" className="bg-brand-cyan text-brand-navy px-6 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-pink hover:text-white transition-all active:scale-95">
-                + Přidat
-              </button>
+            <form action={createPeriod} className="flex flex-wrap gap-3 pt-4 border-t border-gray-100">
+              <input name="name" placeholder="Název (např. Rok 2025)" required className={inputCls} />
+              <input name="startDate" type="date" required className={inputCls} />
+              <input name="endDate"   type="date" required className={inputCls} />
+              <button type="submit" className={btnCyan}>+ Přidat</button>
             </form>
           )}
         </section>
 
-        {selectedPeriod && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* ── TAB: FIRMA ─────────────────────────────────────────────────── */}
+        {sel && tab === "firma" && (
+          <>
 
-            {/* LEVÝ SLOUP: Seznam uživatelů */}
-            <div className="lg:col-span-1 space-y-4">
+            {/* Výkonnostní parametry */}
+            <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+              <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-5">Výkonnostní parametry</h2>
+              <p className="text-[11px] text-gray-400 mb-5">Definujte parametry pro výpočet bonusu. Celková váha by měla být 100&nbsp;%. Bariéra = min. % plnění, pod ním je složka nulová.</p>
 
-              {/* Firemní parametry (kompaktní) */}
-              <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-                <h3 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-4">Firemní parametry</h3>
-                <form action={updateCompanyParameters.bind(null, selectedPeriod.id)} className="space-y-3">
-                  <MiniField label="Aktuální EBITDA (CZK)" name="currentEbitda" defaultValue={companyParams?.currentEbitda ?? 0} />
-                  <MiniField label="Cílová EBITDA (CZK)" name="targetEbitda" defaultValue={companyParams?.targetEbitda ?? 0} />
-                  <MiniField label="Aktuální HORIZONT" name="currentHorizont" defaultValue={companyParams?.currentHorizont ?? 0} step="0.01" />
-                  <MiniField label="Cílový HORIZONT" name="targetHorizont" defaultValue={companyParams?.targetHorizont ?? 0} step="0.01" />
-                  <MiniField label="POP Multiplier" name="currentMultiplier" defaultValue={companyParams?.currentMultiplier ?? 6.0} step="0.1" />
-                  {companyParams && (
-                    <p className="text-[10px] text-gray-400">
-                      Hodnota firmy: {fmt(companyParams.currentEbitda * companyParams.currentMultiplier)} CZK
+              {perfParams.length > 0 && (
+                <div className="space-y-3 mb-6">
+                  {perfParams.map(p => {
+                    const res = p.results.find(r => r.quarter === curQ && r.year === curY)
+                    const ach = res && res.target > 0 ? Math.min(1.5, res.actual / res.target) : null
+                    const thresholdMet = ach !== null ? ach >= p.threshold / 100 : null
+                    return (
+                      <div key={p.id} className="border border-gray-200 rounded-2xl overflow-hidden">
+                        {/* Hlavička parametru */}
+                        <div className="flex items-start justify-between px-5 py-4 bg-gray-50">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <span className="font-black text-gray-900 text-sm">{p.name}</span>
+                              <span className="text-[9px] font-black bg-brand-cyan/10 text-brand-cyan px-2 py-0.5 rounded-full">váha {p.weight}%</span>
+                              <span className="text-[9px] font-black bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">bariéra {p.threshold}%</span>
+                              {p.gatesParamId && (
+                                <span className="text-[9px] font-black bg-brand-pink/10 text-brand-pink px-2 py-0.5 rounded-full">
+                                  gates → {perfParams.find(x => x.id === p.gatesParamId)?.name ?? "?"}
+                                </span>
+                              )}
+                            </div>
+                            {p.description && <p className="text-[10px] text-gray-400 mt-1">{p.description}</p>}
+                          </div>
+                          <div className="flex items-center gap-2 ml-3">
+                            {thresholdMet !== null && (
+                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${thresholdMet ? "bg-brand-green/10 text-brand-green" : "bg-brand-pink/10 text-brand-pink"}`}>
+                                {ach !== null ? `${Math.round(ach * 100)}%` : "—"} {thresholdMet ? "✓" : "✗ bariéra"}
+                              </span>
+                            )}
+                            <form action={deletePerformanceParameter.bind(null, p.id)}>
+                              <button className="text-gray-300 hover:text-brand-pink transition-colors p-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                              </button>
+                            </form>
+                          </div>
+                        </div>
+
+                        {/* Kvartální výsledky */}
+                        <div className="px-5 py-4">
+                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">Kvartální výsledky {curY}</p>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            {[1, 2, 3, 4].map(q => {
+                              const r = p.results.find(r => r.quarter === q && r.year === curY)
+                              const qAch = r && r.target > 0 ? Math.min(1.5, r.actual / r.target) : null
+                              return (
+                                <form key={q} action={upsertQuarterlyResult.bind(null, p.id, q, curY)}>
+                                  <div className={`rounded-xl border p-3 ${r?.isLocked ? "bg-gray-50 border-gray-200" : "border-gray-200 hover:border-brand-cyan/40"}`}>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <span className="text-[9px] font-black text-gray-500 uppercase">Q{q}</span>
+                                      {qAch !== null && (
+                                        <span className={`text-[9px] font-black ${qAch >= p.threshold / 100 ? "text-brand-green" : "text-brand-pink"}`}>
+                                          {Math.round(qAch * 100)}%
+                                        </span>
+                                      )}
+                                    </div>
+                                    {r?.isLocked ? (
+                                      <div className="text-[10px] text-gray-400">
+                                        <p>Skutečnost: <span className="font-black text-gray-700">{fmt(r.actual)}</span></p>
+                                        <p>Cíl: {fmt(r.target)}</p>
+                                        <p className="text-[9px] text-brand-green mt-1">🔒 Uzavřeno</p>
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-1.5">
+                                        <input name="actual" type="number" placeholder="Skutečnost" defaultValue={r?.actual ?? 0} step="any"
+                                          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-bold text-gray-900 outline-none focus:border-brand-cyan" />
+                                        <input name="target" type="number" placeholder="Cíl" defaultValue={r?.target ?? 0} step="any"
+                                          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-bold text-gray-900 outline-none focus:border-brand-cyan" />
+                                        <input name="note" placeholder="Poznámka" defaultValue={r?.note ?? ""}
+                                          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-[10px] text-gray-600 outline-none focus:border-brand-cyan" />
+                                        <div className="flex gap-1">
+                                          <button type="submit" className="flex-1 bg-brand-cyan text-brand-navy py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-brand-pink hover:text-white transition-all">
+                                            Uložit
+                                          </button>
+                                          {r && isAdmin && (
+                                            <form action={lockQuarter.bind(null, p.id, q, curY)}>
+                                              <button type="submit" className="bg-gray-100 text-gray-500 px-2 py-1.5 rounded-lg text-[9px] font-black hover:bg-brand-navy hover:text-white transition-all" title="Uzavřít kvartál">
+                                                🔒
+                                              </button>
+                                            </form>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </form>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  <p className={`text-[10px] text-right ${perfParams.reduce((s, p) => s + p.weight, 0) === 100 ? "text-brand-green font-black" : "text-brand-pink"}`}>
+                    Celková váha: {perfParams.reduce((s, p) => s + p.weight, 0)}% {perfParams.reduce((s, p) => s + p.weight, 0) !== 100 ? "(doporučeno 100%)" : "✓"}
+                  </p>
+                </div>
+              )}
+
+              {/* Přidat parametr */}
+              <details className="group">
+                <summary className="cursor-pointer text-[10px] font-black text-brand-cyan uppercase tracking-widest hover:underline list-none">+ Přidat parametr</summary>
+                <form action={createPerformanceParameter.bind(null, sel.id)} className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-200">
+                  <div className="sm:col-span-2">
+                    <Label>Název</Label>
+                    <input name="name" placeholder="např. EBITDA skupiny" required className={inputCls} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Label>Popis metodiky (zobrazuje se uživateli)</Label>
+                    <textarea name="description" placeholder="Jak se parametr počítá, z čeho se skládá..." rows={2} className={inputCls + " resize-none"} />
+                  </div>
+                  <div>
+                    <Label>Váha (%)</Label>
+                    <input name="weight" type="number" step="0.1" min="0" max="100" placeholder="40" className={inputCls} />
+                  </div>
+                  <div>
+                    <Label>Bariéra – min. plnění (%)</Label>
+                    <input name="threshold" type="number" step="0.1" min="0" max="100" placeholder="80" className={inputCls} />
+                  </div>
+                  <div>
+                    <Label>Pořadí</Label>
+                    <input name="sortOrder" type="number" defaultValue={perfParams.length} className={inputCls} />
+                  </div>
+                  <div className="flex items-end">
+                    <button type="submit" className={btnCyan + " w-full"}>Přidat parametr</button>
+                  </div>
+                </form>
+              </details>
+
+              {/* Nastavení gating */}
+              {perfParams.length >= 2 && (
+                <details className="group mt-3">
+                  <summary className="cursor-pointer text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-brand-pink transition-colors list-none">⚡ Nastavit gating (podmíněné nulování)</summary>
+                  <div className="mt-4 space-y-2 p-4 bg-gray-50 rounded-2xl border border-gray-200">
+                    <p className="text-[10px] text-gray-400 mb-3">Pokud parametr A nesplní bariéru, parametr B se automaticky nuluje.</p>
+                    {perfParams.map(p => (
+                      <form key={p.id} action={updatePerformanceParameter.bind(null, p.id)} className="flex items-center gap-3">
+                        <span className="text-sm font-black text-gray-700 w-40 truncate">{p.name}</span>
+                        <span className="text-[10px] text-gray-400">nuluje →</span>
+                        <select name="gatesParamId" defaultValue={p.gatesParamId ?? ""}
+                          className="flex-1 bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 outline-none focus:border-brand-cyan">
+                          <option value="">— žádný —</option>
+                          {perfParams.filter(x => x.id !== p.id).map(x => (
+                            <option key={x.id} value={x.id}>{x.name}</option>
+                          ))}
+                        </select>
+                        <input type="hidden" name="name"        value={p.name} />
+                        <input type="hidden" name="description" value={p.description ?? ""} />
+                        <input type="hidden" name="weight"      value={p.weight} />
+                        <input type="hidden" name="threshold"   value={p.threshold} />
+                        <button type="submit" className="text-[9px] font-black text-brand-cyan hover:underline uppercase tracking-wider">Uložit</button>
+                      </form>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </section>
+
+            {/* POP – Valuační základ */}
+            <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+              <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-1">POP – Valuační základ</h2>
+              <p className="text-[11px] text-gray-400 mb-5">Hodnota firmy = Aktuální EBITDA × (Základní koeficient + Boostery). Slouží jako základ pro výpočet zisku z podílových plánů.</p>
+
+              <form action={upsertVestingBase.bind(null, sel.id)} className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <Label>Aktuální EBITDA (CZK)</Label>
+                  <input name="currentEbitda" type="number" step="1" defaultValue={vestingBase?.currentEbitda ?? 0} className={inputCls} />
+                </div>
+                <div>
+                  <Label>Základní koeficient</Label>
+                  <input name="baseMultiplier" type="number" step="0.1" defaultValue={vestingBase?.baseMultiplier ?? 6.0} className={inputCls} />
+                </div>
+                <div className="flex flex-col justify-end">
+                  <button type="submit" className={btnCyan + " w-full"}>Uložit</button>
+                  {vestingBase && (
+                    <p className="text-[10px] text-gray-400 mt-2 text-center">
+                      Základ: {fmt(vestingBase.currentEbitda * vestingBase.baseMultiplier)} CZK
                     </p>
                   )}
-                  <button type="submit" className="w-full bg-brand-cyan text-brand-navy py-2.5 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-pink hover:text-white transition-all active:scale-95">
-                    Uložit
-                  </button>
-                </form>
-              </section>
+                </div>
+              </form>
 
-              {/* Seznam uživatelů */}
+              {/* Strategické boostery */}
+              <div className="pt-4 border-t border-gray-100">
+                <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Strategické boostery</h3>
+                <p className="text-[10px] text-gray-400 mb-4">Každý splněný booster navyšuje valuační koeficient. Celkový koeficient = {vestingBase?.baseMultiplier ?? 6} + {boosters.filter(b => b.isAchieved).reduce((s, b) => s + b.multiplierBoost, 0).toFixed(1)} (boostery) = <span className="font-black text-brand-green">{((vestingBase?.baseMultiplier ?? 6) + boosters.filter(b => b.isAchieved).reduce((s, b) => s + b.multiplierBoost, 0)).toFixed(1)}×</span></p>
+
+                {boosters.length > 0 && (
+                  <div className="space-y-2 mb-4">
+                    {boosters.map(b => (
+                      <div key={b.id} className={`flex items-start gap-3 p-4 rounded-xl border ${b.isAchieved ? "bg-brand-green/5 border-brand-green/20" : "bg-gray-50 border-gray-200"}`}>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-black text-sm text-gray-900">{b.name}</span>
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${b.isAchieved ? "bg-brand-green/20 text-brand-green" : "bg-gray-100 text-gray-500"}`}>
+                              +{b.multiplierBoost}× {b.isAchieved ? "✓ Splněno" : "Čeká"}
+                            </span>
+                          </div>
+                          {b.description && <p className="text-[10px] text-gray-400 mt-1">{b.description}</p>}
+                        </div>
+                        <div className="flex gap-2">
+                          <form action={toggleBooster.bind(null, b.id, b.isAchieved)}>
+                            <button className={`text-[9px] font-black px-3 py-1.5 rounded-lg uppercase tracking-wider transition-all border ${b.isAchieved ? "border-brand-green/30 text-brand-green hover:bg-brand-green/10" : "border-gray-200 text-gray-400 hover:border-brand-cyan hover:text-brand-cyan"}`}>
+                              {b.isAchieved ? "Zrušit" : "Splněno"}
+                            </button>
+                          </form>
+                          <form action={deleteBooster.bind(null, b.id)}>
+                            <button className="text-gray-300 hover:text-brand-pink p-1.5 rounded-lg transition-colors">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                            </button>
+                          </form>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <form action={createBooster.bind(null, sel.id)} className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-gray-50 rounded-2xl border border-dashed border-gray-300">
+                  <div className="sm:col-span-1">
+                    <Label>Název boosteru</Label>
+                    <input name="name" placeholder="např. Technologický rozvoj" required className={inputCls} />
+                  </div>
+                  <div className="sm:col-span-1">
+                    <Label>Popis podmínek</Label>
+                    <input name="description" placeholder="Co musí nastat..." className={inputCls} />
+                  </div>
+                  <div>
+                    <Label>Navýšení koeficientu (+×)</Label>
+                    <div className="flex gap-2">
+                      <input name="multiplierBoost" type="number" step="0.1" placeholder="0.5" required className={inputCls} />
+                      <button type="submit" className={btnCyan}>+</button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </section>
+          </>
+        )}
+
+        {/* ── TAB: MANAŽEŘI ──────────────────────────────────────────────── */}
+        {sel && tab === "manageri" && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            {/* Seznam uživatelů */}
+            <div className="lg:col-span-1">
               <section className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100">
+                <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
                   <h3 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic">Manažeři</h3>
                 </div>
                 <div className="divide-y divide-gray-100">
                   {users.map(u => {
-                    const hasComp = allCompensations.some(c => c.userId === u.id)
-                    const isSelected = selectedUser?.id === u.id
+                    const hasComp  = allCompensations.some(c => c.userId === u.id)
+                    const isSel    = selU?.id === u.id
                     return (
-                      <a key={u.id} href={userUrl(u.id)}
-                        className={`flex items-center gap-3 px-5 py-4 transition-all ${isSelected ? 'bg-brand-cyan/5 border-l-4 border-brand-cyan' : 'hover:bg-gray-50 border-l-4 border-transparent'}`}>
-                        <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center font-black text-brand-cyan text-sm border border-gray-200 flex-shrink-0">
+                      <a key={u.id} href={href({ userId: u.id })}
+                        className={`flex items-center gap-3 px-4 py-3.5 transition-all ${isSel ? "bg-brand-cyan/5 border-l-[3px] border-brand-cyan" : "hover:bg-gray-50 border-l-[3px] border-transparent"}`}>
+                        <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center font-black text-brand-cyan text-xs border border-gray-200 flex-shrink-0">
                           {u.name?.charAt(0) || u.email?.charAt(0)}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-black text-gray-900 text-sm truncate">{u.name || u.email}</p>
-                          <p className="text-[10px] text-gray-400 truncate">{u.email}</p>
+                          <p className="text-[9px] text-gray-400 truncate">{u.email}</p>
                         </div>
-                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                          <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                            u.role === "ADMIN"   ? "bg-brand-cyan/10 text-brand-cyan" :
-                            u.role === "MANAGER" ? "bg-brand-pink/10 text-brand-pink" :
-                                                    "bg-gray-100 text-gray-400"
-                          }`}>{u.role === "ADMIN" ? "Admin" : u.role === "MANAGER" ? "Manažer" : "User"}</span>
-                          <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${hasComp ? 'text-brand-green bg-brand-green/10' : 'text-gray-300 bg-gray-100'}`}>
-                            {hasComp ? '✓ odměna' : 'nenastaveno'}
+                        <div className="flex flex-col items-end gap-1">
+                          <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase ${u.role === "ADMIN" ? "bg-brand-cyan/10 text-brand-cyan" : u.role === "MANAGER" ? "bg-brand-pink/10 text-brand-pink" : "bg-gray-100 text-gray-400"}`}>
+                            {u.role === "ADMIN" ? "Admin" : u.role === "MANAGER" ? "Manažer" : "User"}
+                          </span>
+                          <span className={`text-[8px] font-black ${hasComp ? "text-brand-green" : "text-gray-300"}`}>
+                            {hasComp ? "✓" : "○"} odměna
                           </span>
                         </div>
                       </a>
@@ -202,115 +431,109 @@ export default async function ParametersPage({
               </section>
             </div>
 
-            {/* PRAVÝ SLOUP: Detail uživatele */}
-            <div className="lg:col-span-2">
-              {!selectedUser ? (
-                <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm flex items-center justify-center h-64">
-                  <div className="text-center">
-                    <p className="text-4xl mb-3">👈</p>
-                    <p className="font-black text-gray-400 text-sm uppercase tracking-widest">Vyberte manažera ze seznamu</p>
-                  </div>
+            {/* Detail uživatele */}
+            <div className="lg:col-span-2 space-y-5">
+              {!selU ? (
+                <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm flex items-center justify-center h-48">
+                  <p className="text-gray-400 font-black text-sm uppercase tracking-widest">← Vyberte manažera</p>
                 </div>
               ) : (
-                <div className="space-y-6">
-
+                <>
                   {/* Identita */}
-                  <div className="bg-white px-6 py-4 rounded-[2rem] border border-gray-100 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center font-black text-brand-cyan text-lg border border-gray-200">
-                      {selectedUser.name?.charAt(0) || selectedUser.email?.charAt(0)}
+                  <div className="bg-white px-5 py-4 rounded-[2rem] border border-gray-100 shadow-sm flex items-center gap-4">
+                    <div className="w-11 h-11 rounded-2xl bg-gray-100 flex items-center justify-center font-black text-brand-cyan text-base border border-gray-200">
+                      {selU.name?.charAt(0) || selU.email?.charAt(0)}
                     </div>
                     <div>
-                      <p className="font-black text-gray-900 text-base italic uppercase tracking-tight">{selectedUser.name || "—"}</p>
-                      <p className="text-[11px] text-gray-400 font-bold">{selectedUser.email} · {selectedPeriod.name}</p>
+                      <p className="font-black text-gray-900 italic uppercase tracking-tight">{selU.name || "—"}</p>
+                      <p className="text-[11px] text-gray-400">{selU.email} · {sel.name}</p>
                     </div>
                   </div>
 
                   {/* ODMĚNA */}
-                  <section className="bg-white p-7 rounded-[2rem] border border-gray-100 shadow-sm">
-                    <h3 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-5">Odměna</h3>
-                    <form action={adminSetCompensation.bind(null, selectedUser.id, selectedPeriod.id)} className="space-y-5">
+                  <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+                    <h3 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-5">Smluvní podmínky odměny</h3>
+                    <form action={adminSetCompensation.bind(null, selU.id, sel.id)} className="space-y-5">
 
                       <div className="grid grid-cols-2 gap-4">
-                        <Field label="Základní plat / měs. (CZK)" name="baseSalary" defaultValue={compensation?.baseSalary ?? 0} />
-                        <Field label="Roční cílová odměna (CZK)" name="targetBonusAnnual" defaultValue={compensation?.targetBonusAnnual ?? 0} />
+                        <div><Label>Základní plat / měs. (CZK)</Label><input name="baseSalary" type="number" defaultValue={compensation?.baseSalary ?? 0} className={inputCls} /></div>
+                        <div><Label>Roční cílový bonus (CZK)</Label><input name="targetBonusAnnual" type="number" defaultValue={compensation?.targetBonusAnnual ?? 0} className={inputCls} /></div>
                       </div>
 
                       <div className="pt-4 border-t border-gray-100">
-                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Váhy bonusu (%)</p>
-                        <div className="grid grid-cols-3 gap-3">
-                          <Field label="EBITDA %" name="bonusWeightEbitda" defaultValue={compensation?.bonusWeightEbitda ?? 33} step="0.1" />
-                          <Field label="HORIZONT %" name="bonusWeightHorizont" defaultValue={compensation?.bonusWeightHorizont ?? 33} step="0.1" />
-                          <Field label="KPI %" name="bonusWeightKpi" defaultValue={compensation?.bonusWeightKpi ?? 34} step="0.1" />
-                        </div>
-                      </div>
-
-                      <div className="pt-4 border-t border-gray-100">
-                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Phantom Option Plan</p>
-                        <div className="grid grid-cols-3 gap-3">
-                          <Field label="Share %" name="sharePercent" defaultValue={compensation?.sharePercent ?? 0} step="0.01" />
-                          <Field label="Grant EBITDA (CZK)" name="grantEbitda" defaultValue={compensation?.grantEbitda ?? 0} />
-                          <Field label="Grant Multiplier" name="grantMultiplier" defaultValue={compensation?.grantMultiplier ?? 0} step="0.1" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3 mt-3">
-                          <Field label="Vesting (roky)" name="vestingYears" defaultValue={compensation?.vestingYears ?? 3} step="1" />
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Datum grantu</label>
-                            <input name="grantDate" type="date"
-                              defaultValue={compensation?.grantDate ? new Date(compensation.grantDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}
-                              className="w-full bg-gray-50 rounded-xl px-4 py-3 font-bold border-2 border-gray-200 focus:border-brand-cyan outline-none transition-all text-gray-900 text-sm" />
+                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Phantom Option Plan (POP)</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div><Label>Podíl (%)</Label><input name="sharePercent" type="number" step="0.01" defaultValue={compensation?.sharePercent ?? 0} className={inputCls} /></div>
+                          <div><Label>EBITDA při vstupu (CZK)</Label><input name="grantEbitda" type="number" defaultValue={compensation?.grantEbitda ?? 0} className={inputCls} /></div>
+                          <div><Label>Multiplier při vstupu</Label><input name="grantMultiplier" type="number" step="0.1" defaultValue={compensation?.grantMultiplier ?? 0} className={inputCls} /></div>
+                          <div>
+                            <Label>Datum grantu</Label>
+                            <input name="grantDate" type="date" className={inputCls}
+                              defaultValue={compensation?.grantDate ? new Date(compensation.grantDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]} />
                           </div>
                         </div>
                       </div>
 
-                      <button type="submit" className="w-full bg-brand-cyan text-brand-navy py-3.5 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-pink hover:text-white transition-all active:scale-95">
-                        Uložit odměnu
-                      </button>
+                      <div className="pt-4 border-t border-gray-100">
+                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Vesting</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div><Label>Délka vestingu (roky)</Label><input name="vestingYears" type="number" defaultValue={compensation?.vestingYears ?? 4} className={inputCls} /></div>
+                          <div><Label>Výplata ročně (%)</Label><input name="vestingPercent" type="number" step="0.1" defaultValue={compensation?.vestingPercent ?? 25} className={inputCls} /></div>
+                        </div>
+                        {compensation && (
+                          <p className="text-[10px] text-gray-400 mt-2">
+                            Např. při 25&nbsp;% ročně: {compensation.vestingYears}× {fmt((0) * compensation.vestingPercent / 100)} CZK/rok (vypočítá se z aktuální hodnoty POP)
+                          </p>
+                        )}
+                      </div>
+
+                      <button type="submit" className={btnCyan + " w-full"}>Uložit smluvní podmínky</button>
                     </form>
                   </section>
 
                   {/* KPI ÚKOLY */}
-                  <section className="bg-white p-7 rounded-[2rem] border border-gray-100 shadow-sm">
-                    <h3 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-5">KPI úkoly</h3>
+                  <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+                    <h3 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-5">Individuální KPI úkoly</h3>
 
-                    <form action={adminAddKpiTask.bind(null, selectedUser.id, selectedPeriod.id)} className="flex gap-3 mb-5 bg-gray-50 p-3 rounded-xl border border-gray-200">
-                      <input name="name" placeholder="Název úkolu..." required
-                        className="flex-1 bg-transparent px-3 py-2 outline-none font-bold text-sm text-gray-900 placeholder:text-gray-400" />
-                      <input name="weight" type="number" step="1" min="0" max="100" placeholder="%" required
-                        className="w-20 bg-white rounded-lg px-3 py-2 text-center font-black text-brand-cyan border-2 border-gray-200 focus:border-brand-cyan outline-none text-sm" />
-                      <button type="submit" className="bg-brand-cyan text-brand-navy px-4 py-2 rounded-lg font-black uppercase text-[10px] tracking-widest hover:bg-brand-pink hover:text-white transition-all active:scale-95">
-                        + Přidat
-                      </button>
+                    <form action={adminAddKpiTask.bind(null, selU.id, sel.id)} className="flex gap-3 mb-5 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                      <div className="flex-1 space-y-2">
+                        <input name="name" placeholder="Název úkolu..." required className="w-full bg-transparent px-3 py-2 outline-none font-bold text-sm text-gray-900 placeholder:text-gray-400" />
+                        <input name="description" placeholder="Popis a podmínky splnění..." className="w-full bg-transparent px-3 py-1 outline-none text-[11px] text-gray-500 placeholder:text-gray-300" />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <input name="weight" type="number" step="1" min="0" max="100" placeholder="%" required
+                          className="w-16 bg-white rounded-lg px-2 py-2 text-center font-black text-brand-cyan border-2 border-gray-200 focus:border-brand-cyan outline-none text-sm" />
+                        <button type="submit" className={btnCyan}>+</button>
+                      </div>
                     </form>
 
                     {kpiTasks.length === 0 ? (
-                      <p className="text-center text-gray-300 py-8 text-sm italic border-2 border-dashed border-gray-100 rounded-xl">
-                        Žádné KPI úkoly pro toto období.
-                      </p>
+                      <p className="text-center text-gray-300 py-6 text-sm italic border-2 border-dashed border-gray-100 rounded-xl">Žádné KPI úkoly.</p>
                     ) : (
                       <div className="space-y-2">
                         {kpiTasks.map(t => (
-                          <div key={t.id} className={`flex items-center justify-between px-4 py-3 rounded-xl border ${t.isCompleted ? 'bg-brand-green/5 border-brand-green/20' : 'bg-gray-50 border-gray-200'}`}>
-                            <div className="flex items-center gap-3">
-                              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${t.isCompleted ? 'bg-brand-green' : 'bg-gray-300'}`} />
-                              <p className={`font-bold text-sm ${t.isCompleted ? 'text-brand-green italic' : 'text-gray-900'}`}>{t.name}</p>
-                              <span className="text-[9px] font-black text-brand-cyan bg-white px-2 py-0.5 rounded-full border border-gray-200">{t.weight}%</span>
+                          <div key={t.id} className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${t.isCompleted ? "bg-brand-green/5 border-brand-green/20" : "bg-gray-50 border-gray-200"}`}>
+                            <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${t.isCompleted ? "bg-brand-green" : "bg-gray-300"}`} />
+                            <div className="flex-1 min-w-0">
+                              <p className={`font-black text-sm ${t.isCompleted ? "text-brand-green italic" : "text-gray-900"}`}>{t.name}</p>
+                              {t.description && <p className="text-[10px] text-gray-400 mt-0.5">{t.description}</p>}
                             </div>
+                            <span className="text-[9px] font-black text-brand-cyan bg-white px-2 py-0.5 rounded-full border border-gray-200 flex-shrink-0">{t.weight}%</span>
                             <form action={adminDeleteKpiTask.bind(null, t.id)}>
-                              <button className="text-gray-300 hover:text-brand-pink p-1 rounded transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                              <button className="text-gray-300 hover:text-brand-pink p-1 rounded transition-colors flex-shrink-0">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                               </button>
                             </form>
                           </div>
                         ))}
-                        <p className={`text-[10px] text-right pt-1 ${kpiTasks.reduce((s, t) => s + t.weight, 0) === 100 ? 'text-brand-green font-black' : 'text-gray-400'}`}>
-                          Celková váha: {kpiTasks.reduce((s, t) => s + t.weight, 0)}%
-                          {kpiTasks.reduce((s, t) => s + t.weight, 0) !== 100 && <span className="text-brand-pink ml-1">(doporučeno 100%)</span>}
+                        <p className={`text-[10px] text-right pt-1 font-black ${kpiTasks.reduce((s, t) => s + t.weight, 0) === 100 ? "text-brand-green" : "text-brand-pink"}`}>
+                          Váha celkem: {kpiTasks.reduce((s, t) => s + t.weight, 0)}%
+                          {kpiTasks.reduce((s, t) => s + t.weight, 0) !== 100 && " (doporučeno 100%)"}
                         </p>
                       </div>
                     )}
                   </section>
-
-                </div>
+                </>
               )}
             </div>
           </div>
@@ -321,26 +544,11 @@ export default async function ParametersPage({
   )
 }
 
-function Field({ label, name, defaultValue, step = "1" }: {
-  label: string; name: string; defaultValue: number; step?: string
-}) {
-  return (
-    <div className="space-y-1.5">
-      <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">{label}</label>
-      <input name={name} type="number" step={step} defaultValue={defaultValue}
-        className="w-full bg-gray-50 rounded-xl px-4 py-3 font-black border-2 border-gray-200 focus:border-brand-cyan outline-none transition-all text-gray-900 text-sm" />
-    </div>
-  )
-}
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function MiniField({ label, name, defaultValue, step = "1" }: {
-  label: string; name: string; defaultValue: number; step?: string
-}) {
-  return (
-    <div className="space-y-1">
-      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block">{label}</label>
-      <input name={name} type="number" step={step} defaultValue={defaultValue}
-        className="w-full bg-gray-50 rounded-lg px-3 py-2 font-black border border-gray-200 focus:border-brand-cyan outline-none transition-all text-gray-900 text-sm" />
-    </div>
-  )
+const inputCls = "w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
+const btnCyan  = "bg-brand-cyan text-brand-navy px-5 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-pink hover:text-white transition-all active:scale-95 whitespace-nowrap"
+
+function Label({ children }: { children: React.ReactNode }) {
+  return <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1.5">{children}</label>
 }
