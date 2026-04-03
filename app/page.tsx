@@ -7,7 +7,11 @@ import Image from "next/image"
 const fmt = (n: number) => Intl.NumberFormat('cs-CZ').format(Math.round(n))
 const pct = (n: number) => `${Math.round(n * 100)}%`
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; y?: string }>
+}) {
   const session = await auth()
 
   // ── LOGIN ────────────────────────────────────────────────────────────────
@@ -81,7 +85,14 @@ export default async function Home() {
       ])
     : [null, [], [], null, [], []]
 
-  const { quarter: curQ, year: curY } = currentQuarter()
+  const { quarter: nowQ, year: nowY } = currentQuarter()
+  const { q, y } = await searchParams
+  const curQ = q ? parseInt(q) : nowQ
+  const curY = y ? parseInt(y) : nowY
+
+  // Dostupné roky z výsledků
+  const availableYears: number[] = Array.from(new Set(perfParams.flatMap(p => p.results.map(r => r.year as number)))).sort()
+  if (!availableYears.includes(nowY)) availableYears.push(nowY)
 
   // ── VÝPOČTY ───────────────────────────────────────────────────────────────
 
@@ -143,6 +154,23 @@ export default async function Home() {
             ? <span className="text-[10px] font-black text-brand-cyan/70 uppercase tracking-widest">{period.name}</span>
             : <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Žádné aktivní období</span>
           }
+          {period && (
+            <div className="flex items-center gap-1 ml-2">
+              {availableYears.map(yr => (
+                <a key={yr} href={`/?y=${yr}&q=${yr === curY ? curQ : 1}`}
+                  className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all ${yr === curY ? "bg-brand-navy text-white" : "text-gray-400 hover:text-brand-navy"}`}>
+                  {yr}
+                </a>
+              ))}
+              <span className="w-px h-4 bg-gray-200 mx-1" />
+              {[1, 2, 3, 4].map(qn => (
+                <a key={qn} href={`/?y=${curY}&q=${qn}`}
+                  className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all ${qn === curQ ? "bg-brand-cyan text-brand-navy" : "text-gray-400 hover:text-brand-cyan"}`}>
+                  Q{qn}
+                </a>
+              ))}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-4">
           {(isAdmin || isManager) && (
