@@ -7,37 +7,28 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// --- ENUMERACE ---
 enum Role {
   USER
   ADMIN
   MANAGER
 }
 
-// --- MODELY PRO UŽIVATELE A AUTENTIZACI ---
 model User {
   id            String    @id @default(cuid())
   name          String?
   email         String?   @unique
   emailVerified DateTime?
-  image         String? // Profilový obrázek z Google
+  image         String?
   role          Role      @default(USER)
-  isAllowed     Boolean  @default(false)
+  isAllowed     Boolean   @default(false)
 
-  // Relace (musí být tady, aby Account a Session fungovaly)
-  accounts Account[]
-  sessions Session[]
-  compensation  Compensation? 
-  metrics       StrategicMetric[] // Úkoly, které ovlivňují multiplier
-  
+  accounts      Account[]
+  sessions      Session[]
+  compensation  Compensation?
+  kpiTasks      KpiTask[]
+
   createdAt     DateTime  @default(now())
-
-  // Tvoje aplikace
-  tasks   Task[]
-  pspPlan PspPlan?
-
-  
-  updatedAt DateTime @updatedAt
+  updatedAt     DateTime  @updatedAt
 }
 
 model Account {
@@ -75,48 +66,54 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// --- TVOJE APLIKAČNÍ MODELY ---
+// --- FIREMNÍ PARAMETRY (globální, sdílené) ---
 
-model Task {
-  id          String  @id @default(cuid())
-  title       String
-  description String?
-  userId      String
-  user        User    @relation(fields: [userId], references: [id])
+model CompanyParameters {
+  id                String @id @default("global")
+
+  // Roční cílová odměna – vstupy
+  currentEbitda     Float  @default(0)
+  targetEbitda      Float  @default(0)
+  currentHorizont   Float  @default(0)
+  targetHorizont    Float  @default(0)
+
+  // Phantom Option Plan – aktuální multiplier (admin mění dle výsledků)
+  currentMultiplier Float  @default(6.0)
 }
 
-model PspPlan {
-  id     String @id @default(cuid())
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id])
-}
+// --- ODMĚNA MANAŽERA ---
+
 model Compensation {
-  id                String  @id @default(cuid())
-  userId            String  @unique
-  baseSalary        Float   // Fixní měsíční plat
-  targetBonusAnnual Float   // Roční cílový bonus (variabilní složka)
-  
-  // Phantom Option Plan (POP)
-  popUnits          Float   // Podíl v % nebo počet jednotek
-  grantEbitda       Float   // EBITDA při vstupu
-  grantMultiplier   Float   // Multiplier při vstupu
-  vestingYears      Int     @default(3)
-  startDate         DateTime @default(now())
+  id                  String   @id @default(cuid())
+  userId              String   @unique
 
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Základní plat
+  baseSalary          Float    @default(0)   // měsíční, CZK
+
+  // Roční cílová odměna
+  targetBonusAnnual   Float    @default(0)   // celková cílová odměna, CZK/rok
+  bonusWeightEbitda   Float    @default(33)  // % složka závislá na EBITDA
+  bonusWeightHorizont Float    @default(33)  // % složka závislá na HORIZONTu
+  bonusWeightKpi      Float    @default(34)  // % složka závislá na KPI úkolech
+
+  // Phantom Option Plan
+  sharePercent        Float    @default(0)   // podíl v % z vytvořené hodnoty
+  grantEbitda         Float    @default(0)   // EBITDA při vstupu do POP
+  grantMultiplier     Float    @default(0)   // multiplier při vstupu do POP
+  vestingYears        Int      @default(3)   // délka POP v letech
+  grantDate           DateTime @default(now())
+
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model StrategicMetric {
-  id          String   @id @default(cuid())
-  name        String   // Název úkolu (např. Expanze DE)
-  multiplierImpact Float // Kolik přidá k multiplieru (např. 0.2)
-  isCompleted Boolean  @default(false)
+// --- KPI ÚKOLY MANAŽERA ---
+
+model KpiTask {
+  id          String  @id @default(cuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
+  name        String
+  weight      Float   @default(0)    // váha v rámci KPI složky (součet = 100%)
+  isCompleted Boolean @default(false)
 
-model GlobalSettings {
-  id             String @id @default("global")
-  currentEbitda  Float  @default(50000000)
-  baseMultiplier Float  @default(6.0)
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
