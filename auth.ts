@@ -31,9 +31,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async signIn({ user }) {
       if (!user.email) return false
 
-      // Pro Credentials ověření proběhlo v authorize — stačí zkontrolovat isAllowed
       const dbUser = await prisma.user.findUnique({ where: { email: user.email } })
-      return dbUser?.isAllowed ?? false
+
+      if (!dbUser) {
+        // Bootstrap: pokud žádný admin neexistuje, první přihlášení = admin
+        const adminCount = await prisma.user.count({ where: { role: "ADMIN", isAllowed: true } })
+        if (adminCount === 0) {
+          await prisma.user.create({
+            data: { email: user.email, name: user.name, image: user.image, isAllowed: true, role: "ADMIN" },
+          })
+          return true
+        }
+        return false
+      }
+
+      if (!dbUser.isAllowed) return false
+
+      // Aktualizace jména/fotky z Google
+      if (user.name || user.image) {
+        await prisma.user.update({
+          where: { email: user.email },
+          data: { name: user.name ?? undefined, image: user.image ?? undefined },
+        })
+      }
+
+      return true
     },
     async jwt({ token, user }) {
       if (user) {
