@@ -6,25 +6,42 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import bcrypt from "bcryptjs"
 
-// --- Helpers ---
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
 
-async function requireAdmin() {
+async function getCallerOrThrow() {
   const session = await auth()
   const email = session?.user?.email
   if (!email) throw new Error("Nepřihlášen")
   const caller = await prisma.user.findUnique({ where: { email } })
-  if (caller?.role !== "ADMIN") throw new Error("Přístup odepřen")
+  if (!caller) throw new Error("Uživatel nenalezen")
+  return caller
+}
+
+async function requireAdmin() {
+  const caller = await getCallerOrThrow()
+  if (caller.role !== "ADMIN") throw new Error("Přístup odepřen")
+  return caller
 }
 
 async function requireAdminOrManager() {
-  const session = await auth()
-  const email = session?.user?.email
-  if (!email) throw new Error("Nepřihlášen")
-  const caller = await prisma.user.findUnique({ where: { email } })
-  if (caller?.role !== "ADMIN" && caller?.role !== "MANAGER") throw new Error("Přístup odepřen")
+  const caller = await getCallerOrThrow()
+  if (caller.role !== "ADMIN" && caller.role !== "MANAGER") throw new Error("Přístup odepřen")
+  return caller
 }
 
-// --- Přihlášení email + heslo ---
+async function audit(userEmail: string, action: string, target?: string, oldValue?: object, newValue?: object) {
+  await prisma.auditLog.create({
+    data: {
+      userEmail,
+      action,
+      target,
+      oldValue:  oldValue  ? JSON.stringify(oldValue)  : undefined,
+      newValue:  newValue  ? JSON.stringify(newValue)  : undefined,
+    }
+  })
+}
+
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
 
 export async function loginWithCredentials(formData: FormData) {
   await signIn("credentials", {
@@ -34,124 +51,10 @@ export async function loginWithCredentials(formData: FormData) {
   })
 }
 
-// --- ADMIN + MANAGER: Firemní parametry (per období) ---
-
-export async function updateCompanyParameters(periodId: string, formData: FormData) {
-  await requireAdminOrManager()
-
-  const data = {
-    currentEbitda:     parseFloat(formData.get("currentEbitda") as string)     || 0,
-    targetEbitda:      parseFloat(formData.get("targetEbitda") as string)      || 0,
-    currentHorizont:   parseFloat(formData.get("currentHorizont") as string)   || 0,
-    targetHorizont:    parseFloat(formData.get("targetHorizont") as string)    || 0,
-    currentMultiplier: parseFloat(formData.get("currentMultiplier") as string) || 6.0,
-  }
-
-  await prisma.companyParameters.upsert({
-    where:  { periodId },
-    update: data,
-    create: { periodId, ...data },
-  })
-
-  revalidatePath("/admin/parameters")
-  revalidatePath("/")
-}
-
-// --- ADMIN: Odměna uživatele (per uživatel + období) ---
-
-export async function adminSetCompensation(userId: string, periodId: string, formData: FormData) {
-  await requireAdmin()
-
-  const grantDateRaw = formData.get("grantDate") as string
-  const grantDate    = grantDateRaw ? new Date(grantDateRaw) : new Date()
-
-  const data = {
-    baseSalary:          parseFloat(formData.get("baseSalary") as string)          || 0,
-    targetBonusAnnual:   parseFloat(formData.get("targetBonusAnnual") as string)   || 0,
-    bonusWeightEbitda:   parseFloat(formData.get("bonusWeightEbitda") as string)   || 0,
-    bonusWeightHorizont: parseFloat(formData.get("bonusWeightHorizont") as string) || 0,
-    bonusWeightKpi:      parseFloat(formData.get("bonusWeightKpi") as string)      || 0,
-    sharePercent:        parseFloat(formData.get("sharePercent") as string)        || 0,
-    grantEbitda:         parseFloat(formData.get("grantEbitda") as string)         || 0,
-    grantMultiplier:     parseFloat(formData.get("grantMultiplier") as string)     || 0,
-    vestingYears:        parseInt(formData.get("vestingYears") as string)          || 3,
-    grantDate,
-  }
-
-  await prisma.compensation.upsert({
-    where:  { userId_periodId: { userId, periodId } },
-    update: data,
-    create: { userId, periodId, ...data },
-  })
-
-  revalidatePath("/admin/parameters")
-  revalidatePath("/")
-}
-
-// --- ADMIN: KPI úkoly (per uživatel + období) ---
-
-export async function adminAddKpiTask(userId: string, periodId: string, formData: FormData) {
-  await requireAdmin()
-
-  const name   = formData.get("name") as string
-  const weight = parseFloat(formData.get("weight") as string) || 0
-
-  await prisma.kpiTask.create({
-    data: { name, weight, userId, periodId },
-  })
-
-  revalidatePath("/admin/parameters")
-}
-
-export async function adminDeleteKpiTask(taskId: string) {
-  await requireAdmin()
-  await prisma.kpiTask.delete({ where: { id: taskId } })
-  revalidatePath("/admin/parameters")
-}
-
-// --- ADMIN + MANAGER: Toggle KPI ---
-
-export async function adminToggleKpiTask(taskId: string, current: boolean) {
-  await requireAdminOrManager()
-  await prisma.kpiTask.update({
-    where: { id: taskId },
-    data:  { isCompleted: !current },
-  })
-  revalidatePath("/admin/parameters")
-  revalidatePath("/")
-}
-
-// --- ADMIN: Správa období ---
-
-export async function createPeriod(formData: FormData) {
-  await requireAdmin()
-  const name      = formData.get("name") as string
-  const startDate = new Date(formData.get("startDate") as string)
-  const endDate   = new Date(formData.get("endDate") as string)
-
-  await prisma.period.create({ data: { name, startDate, endDate } })
-  revalidatePath("/admin/parameters")
-}
-
-export async function setActivePeriod(periodId: string) {
-  await requireAdminOrManager()
-  await prisma.period.updateMany({ data: { isActive: false } })
-  await prisma.period.update({ where: { id: periodId }, data: { isActive: true } })
-  revalidatePath("/admin/parameters")
-  revalidatePath("/")
-}
-
-export async function deletePeriod(periodId: string) {
-  await requireAdmin()
-  await prisma.period.delete({ where: { id: periodId } })
-  revalidatePath("/admin/parameters")
-  redirect("/admin/parameters")
-}
-
-// --- ADMIN: Správa uživatelů ---
+// ─── SPRÁVA UŽIVATELŮ (Admin) ────────────────────────────────────────────────
 
 export async function inviteUser(formData: FormData) {
-  await requireAdmin()
+  const caller = await requireAdmin()
   const email = formData.get("email") as string
   const name  = formData.get("name") as string
 
@@ -160,40 +63,284 @@ export async function inviteUser(formData: FormData) {
     update: { isAllowed: true },
     create: { email, name, isAllowed: true, role: "USER" },
   })
+  await audit(caller.email!, "INVITE_USER", `User:${email}`)
   revalidatePath("/admin")
 }
 
 export async function setUserActive(userId: string, isAllowed: boolean) {
-  await requireAdmin()
+  const caller = await requireAdmin()
   await prisma.user.update({ where: { id: userId }, data: { isAllowed } })
+  await audit(caller.email!, isAllowed ? "ACTIVATE_USER" : "DEACTIVATE_USER", `User:${userId}`)
   revalidatePath("/admin")
   revalidatePath(`/admin/user/${userId}`)
 }
 
 export async function deleteUser(userId: string) {
-  await requireAdmin()
+  const caller = await requireAdmin()
+  await audit(caller.email!, "DELETE_USER", `User:${userId}`)
   await prisma.user.delete({ where: { id: userId } })
   revalidatePath("/admin")
   redirect("/admin")
 }
 
 export async function setUserRole(userId: string, formData: FormData) {
-  await requireAdmin()
+  const caller = await requireAdmin()
   const role = formData.get("role") as "USER" | "MANAGER" | "ADMIN"
+  const old = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
   await prisma.user.update({ where: { id: userId }, data: { role } })
+  await audit(caller.email!, "SET_ROLE", `User:${userId}`, { role: old?.role }, { role })
   revalidatePath(`/admin/user/${userId}`)
   revalidatePath("/admin")
 }
 
 export async function setUserPassword(userId: string, formData: FormData) {
-  await requireAdmin()
+  const caller = await requireAdmin()
   const password = formData.get("password") as string
   if (!password || password.length < 6) throw new Error("Heslo musí mít alespoň 6 znaků")
   const hashed = await bcrypt.hash(password, 12)
   await prisma.user.update({ where: { id: userId }, data: { password: hashed } })
+  await audit(caller.email!, "SET_PASSWORD", `User:${userId}`)
+  revalidatePath(`/admin/user/${userId}`)
+}
+
+export async function setUserDivision(userId: string, formData: FormData) {
+  const caller = await requireAdmin()
+  const divisionId = formData.get("divisionId") as string | null
+  await prisma.user.update({ where: { id: userId }, data: { divisionId: divisionId || null } })
+  await audit(caller.email!, "SET_DIVISION", `User:${userId}`, undefined, { divisionId })
   revalidatePath(`/admin/user/${userId}`)
 }
 
 export async function removeUser(userId: string) {
   await setUserActive(userId, false)
+}
+
+// ─── DIVIZE ──────────────────────────────────────────────────────────────────
+
+export async function createDivision(formData: FormData) {
+  const caller = await requireAdmin()
+  const name        = formData.get("name") as string
+  const description = formData.get("description") as string | null
+  await prisma.division.create({ data: { name, description: description || undefined } })
+  await audit(caller.email!, "CREATE_DIVISION", undefined, undefined, { name })
+  revalidatePath("/admin")
+}
+
+export async function deleteDivision(divisionId: string) {
+  const caller = await requireAdmin()
+  await audit(caller.email!, "DELETE_DIVISION", `Division:${divisionId}`)
+  await prisma.division.delete({ where: { id: divisionId } })
+  revalidatePath("/admin")
+}
+
+// ─── OBDOBÍ ──────────────────────────────────────────────────────────────────
+
+export async function createPeriod(formData: FormData) {
+  const caller = await requireAdmin()
+  const name      = formData.get("name") as string
+  const startDate = new Date(formData.get("startDate") as string)
+  const endDate   = new Date(formData.get("endDate") as string)
+  await prisma.period.create({ data: { name, startDate, endDate } })
+  await audit(caller.email!, "CREATE_PERIOD", undefined, undefined, { name })
+  revalidatePath("/admin/parameters")
+}
+
+export async function setActivePeriod(periodId: string) {
+  const caller = await requireAdminOrManager()
+  await prisma.period.updateMany({ data: { isActive: false } })
+  await prisma.period.update({ where: { id: periodId }, data: { isActive: true } })
+  await audit(caller.email!, "SET_ACTIVE_PERIOD", `Period:${periodId}`)
+  revalidatePath("/admin/parameters")
+  revalidatePath("/")
+}
+
+export async function deletePeriod(periodId: string) {
+  const caller = await requireAdmin()
+  await audit(caller.email!, "DELETE_PERIOD", `Period:${periodId}`)
+  await prisma.period.delete({ where: { id: periodId } })
+  revalidatePath("/admin/parameters")
+  redirect("/admin/parameters")
+}
+
+// ─── VÝKONNOSTNÍ PARAMETRY ───────────────────────────────────────────────────
+
+export async function createPerformanceParameter(periodId: string, formData: FormData) {
+  const caller = await requireAdminOrManager()
+  const data = {
+    periodId,
+    name:         formData.get("name") as string,
+    description:  (formData.get("description") as string) || undefined,
+    weight:       parseFloat(formData.get("weight") as string)    || 0,
+    threshold:    parseFloat(formData.get("threshold") as string) || 0,
+    sortOrder:    parseInt(formData.get("sortOrder") as string)   || 0,
+  }
+  await prisma.performanceParameter.create({ data })
+  await audit(caller.email!, "CREATE_PARAMETER", `Period:${periodId}`, undefined, data)
+  revalidatePath("/admin/parameters")
+}
+
+export async function updatePerformanceParameter(paramId: string, formData: FormData) {
+  const caller = await requireAdminOrManager()
+  const old = await prisma.performanceParameter.findUnique({ where: { id: paramId } })
+  const data = {
+    name:         formData.get("name") as string,
+    description:  (formData.get("description") as string) || undefined,
+    weight:       parseFloat(formData.get("weight") as string)    || 0,
+    threshold:    parseFloat(formData.get("threshold") as string) || 0,
+    gatesParamId: (formData.get("gatesParamId") as string) || null,
+  }
+  await prisma.performanceParameter.update({ where: { id: paramId }, data })
+  await audit(caller.email!, "UPDATE_PARAMETER", `PerformanceParameter:${paramId}`, old ?? undefined, data)
+  revalidatePath("/admin/parameters")
+}
+
+export async function deletePerformanceParameter(paramId: string) {
+  const caller = await requireAdminOrManager()
+  await audit(caller.email!, "DELETE_PARAMETER", `PerformanceParameter:${paramId}`)
+  await prisma.performanceParameter.delete({ where: { id: paramId } })
+  revalidatePath("/admin/parameters")
+}
+
+// ─── KVARTÁLNÍ VÝSLEDKY ───────────────────────────────────────────────────────
+
+export async function upsertQuarterlyResult(
+  parameterId: string, quarter: number, year: number, formData: FormData
+) {
+  const caller = await requireAdminOrManager()
+  const data = {
+    actual: parseFloat(formData.get("actual") as string) || 0,
+    target: parseFloat(formData.get("target") as string) || 0,
+    note:   (formData.get("note") as string) || undefined,
+  }
+  await prisma.quarterlyResult.upsert({
+    where:  { parameterId_quarter_year: { parameterId, quarter, year } },
+    update: data,
+    create: { parameterId, quarter, year, ...data },
+  })
+  await audit(caller.email!, "UPDATE_QUARTERLY_RESULT", `PerformanceParameter:${parameterId}`, undefined, { quarter, year, ...data })
+  revalidatePath("/admin/parameters")
+  revalidatePath("/")
+}
+
+export async function lockQuarter(parameterId: string, quarter: number, year: number) {
+  const caller = await requireAdmin()
+  await prisma.quarterlyResult.update({
+    where: { parameterId_quarter_year: { parameterId, quarter, year } },
+    data:  { isLocked: true, lockedAt: new Date(), lockedByEmail: caller.email! },
+  })
+  await audit(caller.email!, "LOCK_QUARTER", `PerformanceParameter:${parameterId}`, undefined, { quarter, year })
+  revalidatePath("/admin/parameters")
+}
+
+// ─── POP – VESTING BASE ───────────────────────────────────────────────────────
+
+export async function upsertVestingBase(periodId: string, formData: FormData) {
+  const caller = await requireAdminOrManager()
+  const data = {
+    baseMultiplier: parseFloat(formData.get("baseMultiplier") as string) || 6.0,
+    currentEbitda:  parseFloat(formData.get("currentEbitda") as string)  || 0,
+  }
+  await prisma.vestingBase.upsert({
+    where:  { periodId },
+    update: data,
+    create: { periodId, ...data },
+  })
+  await audit(caller.email!, "UPDATE_VESTING_BASE", `Period:${periodId}`, undefined, data)
+  revalidatePath("/admin/parameters")
+  revalidatePath("/")
+}
+
+// ─── STRATEGICKÉ BOOSTERY ────────────────────────────────────────────────────
+
+export async function createBooster(periodId: string, formData: FormData) {
+  const caller = await requireAdminOrManager()
+  const data = {
+    periodId,
+    name:            formData.get("name") as string,
+    description:     (formData.get("description") as string) || undefined,
+    multiplierBoost: parseFloat(formData.get("multiplierBoost") as string) || 0,
+  }
+  await prisma.strategicBooster.create({ data })
+  await audit(caller.email!, "CREATE_BOOSTER", `Period:${periodId}`, undefined, data)
+  revalidatePath("/admin/parameters")
+}
+
+export async function toggleBooster(boosterId: string, current: boolean) {
+  const caller = await requireAdminOrManager()
+  await prisma.strategicBooster.update({
+    where: { id: boosterId },
+    data:  { isAchieved: !current, achievedAt: !current ? new Date() : null },
+  })
+  await audit(caller.email!, "TOGGLE_BOOSTER", `StrategicBooster:${boosterId}`, { isAchieved: current }, { isAchieved: !current })
+  revalidatePath("/admin/parameters")
+  revalidatePath("/")
+}
+
+export async function deleteBooster(boosterId: string) {
+  const caller = await requireAdminOrManager()
+  await audit(caller.email!, "DELETE_BOOSTER", `StrategicBooster:${boosterId}`)
+  await prisma.strategicBooster.delete({ where: { id: boosterId } })
+  revalidatePath("/admin/parameters")
+}
+
+// ─── ODMĚNA MANAŽERA ─────────────────────────────────────────────────────────
+
+export async function adminSetCompensation(userId: string, periodId: string, formData: FormData) {
+  const caller = await requireAdmin()
+  const grantDateRaw = formData.get("grantDate") as string
+  const grantDate    = grantDateRaw ? new Date(grantDateRaw) : new Date()
+
+  const data = {
+    baseSalary:        parseFloat(formData.get("baseSalary") as string)        || 0,
+    targetBonusAnnual: parseFloat(formData.get("targetBonusAnnual") as string) || 0,
+    sharePercent:      parseFloat(formData.get("sharePercent") as string)      || 0,
+    grantEbitda:       parseFloat(formData.get("grantEbitda") as string)       || 0,
+    grantMultiplier:   parseFloat(formData.get("grantMultiplier") as string)   || 0,
+    vestingYears:      parseInt(formData.get("vestingYears") as string)        || 4,
+    vestingPercent:    parseFloat(formData.get("vestingPercent") as string)    || 25,
+    grantDate,
+  }
+
+  await prisma.compensation.upsert({
+    where:  { userId_periodId: { userId, periodId } },
+    update: data,
+    create: { userId, periodId, ...data },
+  })
+  await audit(caller.email!, "UPDATE_COMPENSATION", `User:${userId}`, undefined, data)
+  revalidatePath("/admin/parameters")
+  revalidatePath("/")
+}
+
+// ─── KPI ÚKOLY ────────────────────────────────────────────────────────────────
+
+export async function adminAddKpiTask(userId: string, periodId: string, formData: FormData) {
+  const caller = await requireAdmin()
+  const data = {
+    name:        formData.get("name") as string,
+    description: (formData.get("description") as string) || undefined,
+    weight:      parseFloat(formData.get("weight") as string) || 0,
+    userId,
+    periodId,
+  }
+  await prisma.kpiTask.create({ data })
+  await audit(caller.email!, "ADD_KPI_TASK", `User:${userId}`, undefined, data)
+  revalidatePath("/admin/parameters")
+}
+
+export async function adminDeleteKpiTask(taskId: string) {
+  const caller = await requireAdmin()
+  await audit(caller.email!, "DELETE_KPI_TASK", `KpiTask:${taskId}`)
+  await prisma.kpiTask.delete({ where: { id: taskId } })
+  revalidatePath("/admin/parameters")
+}
+
+export async function adminToggleKpiTask(taskId: string, current: boolean) {
+  const caller = await requireAdminOrManager()
+  await prisma.kpiTask.update({
+    where: { id: taskId },
+    data:  { isCompleted: !current, completedAt: !current ? new Date() : null },
+  })
+  await audit(caller.email!, "TOGGLE_KPI_TASK", `KpiTask:${taskId}`, { isCompleted: current }, { isCompleted: !current })
+  revalidatePath("/admin/parameters")
+  revalidatePath("/")
 }

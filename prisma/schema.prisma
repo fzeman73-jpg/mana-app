@@ -13,6 +13,8 @@ enum Role {
   MANAGER
 }
 
+// ─── UŽIVATELÉ A PŘÍSTUPY ───────────────────────────────────────────────────
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -22,14 +24,18 @@ model User {
   role          Role      @default(USER)
   isAllowed     Boolean   @default(false)
   password      String?
+  divisionId    String?
 
   accounts      Account[]
   sessions      Session[]
   compensations Compensation[]
   kpiTasks      KpiTask[]
+  snapshots     QuarterlySnapshot[]
+  auditLogs     AuditLog[]
+  division      Division? @relation(fields: [divisionId], references: [id], onDelete: SetNull)
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Account {
@@ -45,9 +51,7 @@ model Account {
   scope             String?
   id_token          String? @db.Text
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@unique([provider, providerAccountId])
 }
 
@@ -63,72 +67,186 @@ model VerificationToken {
   identifier String
   token      String   @unique
   expires    DateTime
-
   @@unique([identifier, token])
 }
 
-// --- ČASOVÉ OBDOBÍ ---
+// ─── DIVIZE ──────────────────────────────────────────────────────────────────
+
+model Division {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  users       User[]
+}
+
+// ─── ČASOVÉ OBDOBÍ ───────────────────────────────────────────────────────────
 
 model Period {
   id        String   @id @default(cuid())
-  name      String                        // např. "Rok 2025", "Q1 2025"
+  name      String
   startDate DateTime
   endDate   DateTime
   isActive  Boolean  @default(false)
 
-  companyParams CompanyParameters?
+  companyParams PerformanceParameter[]
   compensations Compensation[]
   kpiTasks      KpiTask[]
+  boosters      StrategicBooster[]
+  snapshots     QuarterlySnapshot[]
+  vestingBase   VestingBase[]
 }
 
-// --- FIREMNÍ PARAMETRY (per období) ---
+// ─── VÝKONNOSTNÍ PARAMETRY (generické – EBITDA, HORIZONT, vlastní…) ──────────
 
-model CompanyParameters {
-  id                String @id @default(cuid())
-  periodId          String @unique
-  period            Period @relation(fields: [periodId], references: [id], onDelete: Cascade)
+// Definice parametru (šablona pro dané období)
+model PerformanceParameter {
+  id          String  @id @default(cuid())
+  periodId    String
+  name        String            // "EBITDA skupiny", "HORIZONT – Divize A"
+  description String?           // textový popis metodiky výpočtu
+  weight      Float             // váha v % z cílového bonusu (součet všech = 100)
+  threshold   Float  @default(0) // bariéra: min % plnění – pod tím je složka = 0
+  sortOrder   Int    @default(0)
 
-  currentEbitda     Float  @default(0)
-  targetEbitda      Float  @default(0)
-  currentHorizont   Float  @default(0)
-  targetHorizont    Float  @default(0)
-  currentMultiplier Float  @default(6.0)
+  // Gating: pokud tento parametr nesplní threshold → gated parametr se nuluje
+  // Příklad: EBITDA nesplní → HORIZONT se nuluje
+  gatesParamId String?           // ID parametru který se nuluje při neúspěchu tohoto
+
+  period     Period             @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  results    QuarterlyResult[]
 }
 
-// --- ODMĚNA MANAŽERA (per uživatel + období) ---
+// Kvartální výsledky na parametr
+model QuarterlyResult {
+  id          String    @id @default(cuid())
+  parameterId String
+  quarter     Int       // 1–4
+  year        Int
+  actual      Float     @default(0)  // skutečná hodnota
+  target      Float     @default(0)  // cílová hodnota pro daný kvartal
+  note        String?               // komentář
+  isLocked    Boolean   @default(false)
+  lockedAt    DateTime?
+  lockedByEmail String?
+
+  parameter PerformanceParameter @relation(fields: [parameterId], references: [id], onDelete: Cascade)
+  @@unique([parameterId, quarter, year])
+}
+
+// ─── POP – PHANTOM OPTION PLAN ───────────────────────────────────────────────
+
+// Základní valuační data pro POP (globální, per období)
+model VestingBase {
+  id              String @id @default(cuid())
+  periodId        String @unique
+  baseMultiplier  Float  @default(6.0)  // základní koeficient
+  currentEbitda   Float  @default(0)    // aktuální EBITDA pro výpočet hodnoty firmy
+
+  period Period @relation(fields: [periodId], references: [id], onDelete: Cascade)
+}
+
+// Strategické boostery – navyšují valuační koeficient
+model StrategicBooster {
+  id              String    @id @default(cuid())
+  periodId        String
+  name            String
+  description     String?   // podmínky, co musí nastat, jak se měří
+  multiplierBoost Float     // o kolik navýší koeficient (např. +0.5)
+  isAchieved      Boolean   @default(false)
+  achievedAt      DateTime?
+  achievedQuarter Int?      // Q1–Q4
+  achievedYear    Int?
+
+  period Period @relation(fields: [periodId], references: [id], onDelete: Cascade)
+}
+
+// ─── ODMĚNA MANAŽERA (smluvní podmínky) ─────────────────────────────────────
 
 model Compensation {
-  id                  String   @id @default(cuid())
-  userId              String
-  periodId            String
+  id                String   @id @default(cuid())
+  userId            String
+  periodId          String
 
-  baseSalary          Float    @default(0)
-  targetBonusAnnual   Float    @default(0)
-  bonusWeightEbitda   Float    @default(33)
-  bonusWeightHorizont Float    @default(33)
-  bonusWeightKpi      Float    @default(34)
-  sharePercent        Float    @default(0)
-  grantEbitda         Float    @default(0)
-  grantMultiplier     Float    @default(0)
-  vestingYears        Int      @default(3)
-  grantDate           DateTime @default(now())
+  // Fixní složka
+  baseSalary        Float    @default(0)   // měsíční plat CZK
 
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  period Period @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  // Variabilní složka
+  targetBonusAnnual Float    @default(0)   // roční cílový bonus CZK
+
+  // POP
+  sharePercent      Float    @default(0)   // podíl v % z vytvořené hodnoty
+  grantEbitda       Float    @default(0)   // EBITDA při vstupu do POP
+  grantMultiplier   Float    @default(0)   // multiplikátor při vstupu do POP
+  grantDate         DateTime @default(now())
+
+  // Vesting
+  vestingYears      Int      @default(4)   // celková délka vestingu
+  vestingPercent    Float    @default(25)  // % z hodnoty POP ročně
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  period   Period           @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  payments VestingPayment[]
 
   @@unique([userId, periodId])
 }
 
-// --- KPI ÚKOLY (per uživatel + období) ---
+// Vesting – splátky POP
+model VestingPayment {
+  id             String    @id @default(cuid())
+  compensationId String
+  vestingYear    Int       // rok od grantu: 1, 2, 3, 4…
+  percentage     Float     // % z celkové hodnoty POP
+  isPaid         Boolean   @default(false)
+  paidAt         DateTime?
+  amount         Float?    // skutečně vyplacená částka CZK
+
+  compensation Compensation @relation(fields: [compensationId], references: [id], onDelete: Cascade)
+  @@unique([compensationId, vestingYear])
+}
+
+// ─── KPI ÚKOLY (individuální) ────────────────────────────────────────────────
 
 model KpiTask {
-  id          String  @id @default(cuid())
+  id          String    @id @default(cuid())
   userId      String
   periodId    String
   name        String
-  weight      Float   @default(0)
-  isCompleted Boolean @default(false)
+  description String?
+  weight      Float     @default(0)    // váha v % (součet = 100)
+  isCompleted Boolean   @default(false)
+  completedAt DateTime?
 
-  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  period      Period @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  period Period @relation(fields: [periodId], references: [id], onDelete: Cascade)
+}
+
+// ─── HISTORICKÉ SNAPSHOTY (uzavřený kvartál) ─────────────────────────────────
+
+model QuarterlySnapshot {
+  id          String   @id @default(cuid())
+  userId      String
+  periodId    String
+  quarter     Int      // 1–4
+  year        Int
+  bonusAmount Float    @default(0)  // bonus připsaný za tento kvartal
+  popValue    Float    @default(0)  // hodnota POP v okamžiku uzavření
+  breakdown   Json?                 // detailní breakdown pro graf
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  period Period @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  @@unique([userId, periodId, quarter, year])
+}
+
+// ─── AUDIT LOG ───────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userEmail String   // kdo provedl změnu
+  action    String   // "UPDATE_COMPENSATION", "LOCK_QUARTER", "ADD_BOOSTER"…
+  target    String?  // "Compensation:clxxx", "QuarterlyResult:clyyy"
+  oldValue  String?  @db.Text  // JSON před změnou
+  newValue  String?  @db.Text  // JSON po změně
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userEmail], references: [email])
 }
