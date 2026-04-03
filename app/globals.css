@@ -10,15 +10,15 @@
 }
 
 @theme inline {
-  --color-background: var(--color-brand-navy);
-  --color-foreground: #ffffff;
+  --color-background: #ffffff;
+  --color-foreground: var(--color-brand-navy);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 :root {
-  --background: #000747;
-  --foreground: #ffffff;
+  --background: #ffffff;
+  --foreground: #000747;
 }
 
 body {
