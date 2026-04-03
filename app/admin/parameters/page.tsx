@@ -6,6 +6,7 @@ import {
   upsertQuarterlyResult, lockQuarter,
   upsertVestingBase, createBooster, toggleBooster, deleteBooster,
   adminSetCompensation, adminAddKpiTask, adminDeleteKpiTask,
+  closeQuarter,
 } from "@/lib/actions"
 import Image from "next/image"
 import { redirect } from "next/navigation"
@@ -389,6 +390,37 @@ export default async function ParametersPage({
                 </form>
               </div>
             </section>
+
+            {/* Uzavření kvartálu */}
+            {isAdmin && (
+              <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+                <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-1">Uzavření kvartálu</h2>
+                <p className="text-[11px] text-gray-400 mb-5">
+                  Uzavřením kvartálu se vytvoří historický snapshot pro každého manažera (bonus + POP hodnota)
+                  a výsledky se zamknou. Akci nelze vzít zpět.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  {[1, 2, 3, 4].map(q => {
+                    const isCurrentQ = q === curQ
+                    return (
+                      <form key={q} action={closeQuarter.bind(null, sel.id, q, curY)}>
+                        <button
+                          type="submit"
+                          className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+                            isCurrentQ
+                              ? "bg-brand-navy text-white border-brand-navy hover:bg-brand-pink hover:border-brand-pink"
+                              : "bg-gray-50 text-gray-400 border-gray-200 hover:border-brand-navy hover:text-brand-navy"
+                          }`}
+                        >
+                          🔒 Uzavřít Q{q} {curY}
+                          {isCurrentQ && <span className="ml-1 text-brand-cyan/80">(aktuální)</span>}
+                        </button>
+                      </form>
+                    )
+                  })}
+                </div>
+              </section>
+            )}
           </>
         )}
 

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import bcrypt from "bcryptjs"
+import { calcBonus, calcPOP } from "@/lib/calculator"
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -341,6 +342,95 @@ export async function adminToggleKpiTask(taskId: string, current: boolean) {
     data:  { isCompleted: !current, completedAt: !current ? new Date() : null },
   })
   await audit(caller.email!, "TOGGLE_KPI_TASK", `KpiTask:${taskId}`, { isCompleted: current }, { isCompleted: !current })
+  revalidatePath("/admin/parameters")
+  revalidatePath("/")
+}
+
+// ─── UZAVŘENÍ KVARTÁLU ────────────────────────────────────────────────────────
+
+/**
+ * Uzavře kvartál pro všechny uživatele v daném období:
+ * 1. Pro každého uživatele spočítá bonus + POP v okamžiku uzavření
+ * 2. Uloží QuarterlySnapshot jako historický bod
+ * 3. Uzamkne všechny QuarterlyResult daného kvartálu
+ */
+export async function closeQuarter(periodId: string, quarter: number, year: number) {
+  const caller = await requireAdmin()
+
+  const [users, perfParams, vestingBase, boosters] = await Promise.all([
+    prisma.compensation.findMany({
+      where:   { periodId },
+      include: { user: true },
+    }),
+    prisma.performanceParameter.findMany({
+      where:   { periodId },
+      include: { results: { where: { quarter, year } } },
+    }),
+    prisma.vestingBase.findUnique({ where: { periodId } }),
+    prisma.strategicBooster.findMany({ where: { periodId } }),
+  ])
+
+  for (const comp of users) {
+    const kpiTasks = await prisma.kpiTask.findMany({
+      where: { userId: comp.userId, periodId },
+    })
+
+    // Výpočet bonusu
+    const paramInputs = perfParams.map(p => {
+      const res = p.results[0]
+      return {
+        id: p.id, name: p.name, weight: p.weight,
+        threshold: p.threshold, gatesParamId: p.gatesParamId,
+        actual: res?.actual ?? 0, target: res?.target ?? 0,
+      }
+    })
+
+    const bonus = calcBonus(
+      paramInputs,
+      comp.targetBonusAnnual,
+      kpiTasks.map(t => ({ weight: t.weight, isCompleted: t.isCompleted })),
+      0
+    )
+
+    // Výpočet POP
+    const pop = vestingBase ? calcPOP({
+      sharePercent:    comp.sharePercent,
+      grantEbitda:     comp.grantEbitda,
+      grantMultiplier: comp.grantMultiplier,
+      currentEbitda:   vestingBase.currentEbitda,
+      baseMultiplier:  vestingBase.baseMultiplier,
+      boosters:        boosters.map(b => ({ multiplierBoost: b.multiplierBoost, isAchieved: b.isAchieved })),
+    }) : null
+
+    // Uložení snapshotu
+    await prisma.quarterlySnapshot.upsert({
+      where:  { userId_periodId_quarter_year: { userId: comp.userId, periodId, quarter, year } },
+      update: {
+        bonusAmount: bonus.total,
+        popValue:    pop?.grossGain ?? 0,
+        breakdown:   bonus as object,
+      },
+      create: {
+        userId: comp.userId, periodId, quarter, year,
+        bonusAmount: bonus.total,
+        popValue:    pop?.grossGain ?? 0,
+        breakdown:   bonus as object,
+      },
+    })
+  }
+
+  // Uzamčení všech výsledků daného kvartálu
+  await prisma.quarterlyResult.updateMany({
+    where: {
+      parameter: { periodId },
+      quarter,
+      year,
+      isLocked: false,
+    },
+    data: { isLocked: true, lockedAt: new Date(), lockedByEmail: caller.email! },
+  })
+
+  await audit(caller.email!, "CLOSE_QUARTER", `Period:${periodId}`, undefined, { quarter, year, usersCount: users.length })
   revalidatePath("/admin/parameters")
   revalidatePath("/")
 }
