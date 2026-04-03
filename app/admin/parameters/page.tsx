@@ -92,34 +92,33 @@ export default async function ParametersPage({
           {periods.length > 0 ? (
             <div className="flex flex-wrap gap-3 mb-6">
               {periods.map(p => (
-                <a key={p.id} href={periodUrl(p.id)}
-                  className={`flex items-center gap-3 px-5 py-3 rounded-2xl border transition-all ${
-                    selectedPeriod?.id === p.id
-                      ? 'border-brand-cyan bg-brand-cyan/5 ring-2 ring-brand-cyan/20'
-                      : 'border-gray-200 hover:border-brand-cyan/40'
-                  }`}>
-                  <div>
-                    <p className="font-black text-gray-900 text-sm">{p.name}</p>
-                    <p className="text-[10px] text-gray-400">
-                      {new Date(p.startDate).toLocaleDateString('cs-CZ')} – {new Date(p.endDate).toLocaleDateString('cs-CZ')}
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-1 items-end">
-                    {p.isActive && <span className="text-[8px] font-black bg-brand-green/20 text-brand-green px-2 py-0.5 rounded-full uppercase tracking-widest">Aktivní</span>}
-                    <div className="flex gap-2">
-                      {!p.isActive && (
-                        <form action={setActivePeriod.bind(null, p.id)} onClick={e => e.stopPropagation()}>
-                          <button type="submit" className="text-[9px] font-black text-gray-400 hover:text-brand-green transition-colors">aktivovat</button>
-                        </form>
-                      )}
-                      {isAdmin && (
-                        <form action={deletePeriod.bind(null, p.id)} onClick={e => e.stopPropagation()}>
-                          <button type="submit" className="text-[9px] font-black text-gray-300 hover:text-brand-pink transition-colors">smazat</button>
-                        </form>
-                      )}
+                <div key={p.id} className={`rounded-2xl border transition-all overflow-hidden ${
+                  selectedPeriod?.id === p.id
+                    ? 'border-brand-cyan ring-2 ring-brand-cyan/20'
+                    : 'border-gray-200'
+                }`}>
+                  <a href={periodUrl(p.id)} className={`flex items-center gap-3 px-5 py-3 block ${selectedPeriod?.id === p.id ? 'bg-brand-cyan/5' : 'hover:bg-gray-50'}`}>
+                    <div>
+                      <p className="font-black text-gray-900 text-sm">{p.name}</p>
+                      <p className="text-[10px] text-gray-400">
+                        {new Date(p.startDate).toLocaleDateString('cs-CZ')} – {new Date(p.endDate).toLocaleDateString('cs-CZ')}
+                      </p>
                     </div>
+                    {p.isActive && <span className="text-[8px] font-black bg-brand-green/20 text-brand-green px-2 py-0.5 rounded-full uppercase tracking-widest ml-2">Aktivní</span>}
+                  </a>
+                  <div className="flex gap-3 px-5 py-2 border-t border-gray-100 bg-gray-50">
+                    {!p.isActive && (
+                      <form action={setActivePeriod.bind(null, p.id)}>
+                        <button type="submit" className="text-[9px] font-black text-gray-400 hover:text-brand-green transition-colors uppercase tracking-wider">Aktivovat</button>
+                      </form>
+                    )}
+                    {isAdmin && (
+                      <form action={deletePeriod.bind(null, p.id)} className="ml-auto">
+                        <button type="submit" className="text-[9px] font-black text-gray-300 hover:text-brand-pink transition-colors uppercase tracking-wider">Smazat</button>
+                      </form>
+                    )}
                   </div>
-                </a>
+                </div>
               ))}
             </div>
           ) : (
