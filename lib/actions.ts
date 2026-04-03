@@ -1,8 +1,10 @@
 "use server"
 
-import { auth } from "@/auth"
+import { auth, signIn } from "@/auth"
 import { prisma } from "@/lib/db"
 import { revalidatePath } from "next/cache"
+import { redirect } from "next/navigation"
+import bcrypt from "bcryptjs"
 
 // --- Helpers ---
 
@@ -20,6 +22,16 @@ async function requireAdminOrManager() {
   if (!email) throw new Error("Nepřihlášen")
   const caller = await prisma.user.findUnique({ where: { email } })
   if (caller?.role !== "ADMIN" && caller?.role !== "MANAGER") throw new Error("Přístup odepřen")
+}
+
+// --- Přihlášení email + heslo ---
+
+export async function loginWithCredentials(formData: FormData) {
+  await signIn("credentials", {
+    email:      formData.get("email"),
+    password:   formData.get("password"),
+    redirectTo: "/",
+  })
 }
 
 // --- ADMIN + MANAGER: Firemní parametry ---
@@ -109,7 +121,7 @@ export async function adminToggleKpiTask(taskId: string, current: boolean, userI
   revalidatePath("/")
 }
 
-// --- ADMIN: Správa přístupu ---
+// --- ADMIN: Správa uživatelů ---
 
 export async function inviteUser(formData: FormData) {
   await requireAdmin()
@@ -124,27 +136,49 @@ export async function inviteUser(formData: FormData) {
   revalidatePath("/admin")
 }
 
-export async function removeUser(userId: string) {
+export async function setUserActive(userId: string, isAllowed: boolean) {
   await requireAdmin()
-  await prisma.user.update({
-    where: { id: userId },
-    data:  { isAllowed: false },
-  })
+  await prisma.user.update({ where: { id: userId }, data: { isAllowed } })
   revalidatePath("/admin")
+  revalidatePath(`/admin/user/${userId}`)
+}
+
+export async function deleteUser(userId: string) {
+  await requireAdmin()
+  await prisma.user.delete({ where: { id: userId } })
+  revalidatePath("/admin")
+  redirect("/admin")
+}
+
+export async function setUserRole(userId: string, formData: FormData) {
+  await requireAdmin()
+  const role = formData.get("role") as "USER" | "MANAGER" | "ADMIN"
+  await prisma.user.update({ where: { id: userId }, data: { role } })
+  revalidatePath(`/admin/user/${userId}`)
+  revalidatePath("/admin")
+}
+
+export async function setUserPassword(userId: string, formData: FormData) {
+  await requireAdmin()
+  const password = formData.get("password") as string
+  if (!password || password.length < 6) throw new Error("Heslo musí mít alespoň 6 znaků")
+  const hashed = await bcrypt.hash(password, 12)
+  await prisma.user.update({ where: { id: userId }, data: { password: hashed } })
+  revalidatePath(`/admin/user/${userId}`)
+}
+
+// --- Legacy (zachováno pro kompatibilitu) ---
+
+export async function removeUser(userId: string) {
+  await setUserActive(userId, false)
 }
 
 export async function toggleUserRole(userId: string, currentRole: string) {
   await requireAdmin()
   const next: Record<string, "USER" | "MANAGER" | "ADMIN"> = {
-    USER:    "MANAGER",
-    MANAGER: "ADMIN",
-    ADMIN:   "USER",
+    USER: "MANAGER", MANAGER: "ADMIN", ADMIN: "USER",
   }
-  const newRole = next[currentRole] ?? "USER"
-  await prisma.user.update({
-    where: { id: userId },
-    data:  { role: newRole },
-  })
+  await prisma.user.update({ where: { id: userId }, data: { role: next[currentRole] ?? "USER" } })
   revalidatePath("/admin")
   revalidatePath("/")
 }

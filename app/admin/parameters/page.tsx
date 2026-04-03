@@ -30,7 +30,7 @@ export default async function ParametersPage() {
             </div>
           </div>
           <a href="/admin" className="bg-brand-cyan text-brand-navy px-8 py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-brand-pink hover:text-white transition-all shadow-sm">
-            ← User Control
+            ← Správa uživatelů
           </a>
         </header>
 

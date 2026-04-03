@@ -1,4 +1,5 @@
 import { auth, signIn, signOut } from "@/auth"
+import { loginWithCredentials } from "@/lib/actions"
 import { prisma } from "@/lib/db"
 import { adminToggleKpiTask } from "@/lib/actions"
 import { KpiTask, Compensation } from "@prisma/client"
@@ -24,11 +25,39 @@ export default async function Home() {
           <h1 className="text-3xl font-black mb-2 tracking-tighter italic uppercase text-gray-900">
             Performance <span className="text-brand-cyan">Cockpit</span>
           </h1>
-          <p className="text-gray-400 mb-12 font-medium italic tracking-wide text-sm underline decoration-brand-cyan/40 underline-offset-8">
-            Executive Incentives Tracking
+          <p className="text-gray-400 mb-10 font-medium italic tracking-wide text-sm underline decoration-brand-cyan/40 underline-offset-8">
+            Sledování výkonnostních pobídek
           </p>
+
+          {/* Email + heslo */}
+          <form action={loginWithCredentials} className="space-y-3 mb-6">
+            <input
+              name="email"
+              type="email"
+              placeholder="Email"
+              required
+              className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
+            />
+            <input
+              name="password"
+              type="password"
+              placeholder="Heslo"
+              required
+              className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
+            />
+            <button type="submit" className="w-full bg-brand-navy text-white font-black py-4 px-8 rounded-2xl hover:bg-brand-cyan hover:text-brand-navy transition-all shadow-sm active:scale-95 uppercase tracking-[0.2em] text-xs">
+              Přihlásit se
+            </button>
+          </form>
+
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex-1 h-px bg-gray-200" />
+            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">nebo</span>
+            <div className="flex-1 h-px bg-gray-200" />
+          </div>
+
           <form action={async () => { "use server"; await signIn("google") }}>
-            <button className="w-full bg-brand-cyan text-brand-navy font-black py-5 px-8 rounded-2xl hover:bg-brand-pink hover:text-white transition-all shadow-xl active:scale-95 uppercase tracking-[0.2em] text-xs">
+            <button className="w-full bg-brand-cyan text-brand-navy font-black py-4 px-8 rounded-2xl hover:bg-brand-pink hover:text-white transition-all shadow-sm active:scale-95 uppercase tracking-[0.2em] text-xs">
               Vstoupit přes Google
             </button>
           </form>
@@ -101,24 +130,24 @@ export default async function Home() {
         <div className="flex items-center gap-5">
           {(isAdmin || isManager) && (
             <a href="/admin/parameters" className="text-gray-400 hover:text-brand-cyan text-[10px] font-black uppercase tracking-widest transition-colors">
-              Parameters
+              Parametry
             </a>
           )}
           {isAdmin && (
             <a href="/admin" className="bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/30 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-cyan hover:text-brand-navy transition-all flex items-center gap-2 group">
               <span className="w-1.5 h-1.5 bg-brand-cyan rounded-full animate-pulse group-hover:bg-brand-navy" />
-              User Control
+              Správa uživatelů
             </a>
           )}
           <div className="text-right hidden sm:block leading-none">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1.5">Executive Unit</p>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1.5">Přihlášen</p>
             <p className="text-sm font-black text-gray-900 italic">{session.user?.name}</p>
           </div>
           {session.user?.image && (
             <img src={session.user.image} className="w-10 h-10 rounded-full ring-4 ring-brand-cyan/20 border border-brand-cyan/20" referrerPolicy="no-referrer" alt="Profile" />
           )}
           <form action={async () => { "use server"; await signOut() }}>
-            <button className="p-2 text-gray-400 hover:text-brand-pink transition-colors uppercase text-[10px] font-black tracking-widest">Exit</button>
+            <button className="p-2 text-gray-400 hover:text-brand-pink transition-colors uppercase text-[10px] font-black tracking-widest">Odhlásit</button>
           </form>
         </div>
       </nav>

@@ -1,6 +1,6 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
-import { inviteUser, removeUser, toggleUserRole } from "@/lib/actions"
+import { inviteUser, removeUser } from "@/lib/actions"
 import Image from "next/image"
 import { redirect } from "next/navigation"
 
@@ -27,9 +27,9 @@ export default async function AdminPage() {
             <div className="w-px h-10 bg-gray-200 hidden md:block" />
             <div>
               <h1 className="text-2xl font-black italic uppercase tracking-tighter text-gray-900">
-                User <span className="text-brand-cyan">Control</span>
+                Správa <span className="text-brand-cyan">uživatelů</span>
               </h1>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Access & Compensation Management</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Přístupy a oprávnění</p>
             </div>
           </div>
           <div className="flex gap-3">
@@ -45,12 +45,12 @@ export default async function AdminPage() {
         {/* POZVÁNÍ UŽIVATELE */}
         <section className="bg-white p-12 rounded-[3.5rem] shadow-sm relative overflow-hidden ring-1 ring-gray-100">
           <div className="relative z-10">
-            <h2 className="text-brand-cyan text-[11px] font-black uppercase tracking-[0.4em] mb-8 italic">Authorize New Access</h2>
+            <h2 className="text-brand-cyan text-[11px] font-black uppercase tracking-[0.4em] mb-8 italic">Přidat nového uživatele</h2>
             <form action={inviteUser} className="flex flex-col lg:flex-row gap-4">
               <input name="name" placeholder="Celé jméno" className="flex-1 bg-gray-50 border border-gray-200 rounded-2xl px-6 py-4 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900" required />
               <input name="email" type="email" placeholder="Google email (@algotech.cz)" className="flex-[1.5] bg-gray-50 border border-gray-200 rounded-2xl px-6 py-4 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900" required />
               <button type="submit" className="bg-brand-cyan text-brand-navy hover:bg-brand-pink hover:text-white transition-all px-10 py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-sm active:scale-95">
-                Grant Access
+                Přidat
               </button>
             </form>
           </div>
@@ -60,7 +60,7 @@ export default async function AdminPage() {
         {/* TABULKA UŽIVATELŮ */}
         <section className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-8 border-b border-gray-100 flex justify-between items-center">
-            <h3 className="font-black text-gray-900 uppercase italic tracking-tight">Active Whitelist</h3>
+            <h3 className="font-black text-gray-900 uppercase italic tracking-tight">Oprávnění uživatelé</h3>
             <span className="bg-gray-50 text-gray-400 text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest border border-gray-200">
               {allowedUsers.length} Users
             </span>
@@ -70,8 +70,8 @@ export default async function AdminPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
-                  <th className="px-8 py-5">Manager</th>
-                  <th className="px-8 py-5">Role</th>
+                  <th className="px-8 py-5">Uživatel</th>
+                  <th className="px-8 py-5">Úroveň</th>
                   <th className="px-8 py-5">Odměna</th>
                   <th className="px-8 py-5 text-right">Akce</th>
                 </tr>
@@ -108,16 +108,8 @@ export default async function AdminPage() {
                     <td className="px-8 py-6 text-right">
                       <div className="flex justify-end items-center gap-3">
                         <a href={`/admin/user/${u.id}`} className="bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20 hover:bg-brand-cyan hover:text-brand-navy transition-all px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">
-                          Nastavení uživatele
+                          Nastavení
                         </a>
-                        <a href="/admin/parameters" className="bg-brand-pink/10 text-brand-pink border border-brand-pink/20 hover:bg-brand-pink hover:text-white transition-all px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">
-                          Parametry
-                        </a>
-                        <form action={toggleUserRole.bind(null, u.id, u.role)}>
-                          <button className="text-[10px] font-black text-gray-400 hover:text-brand-cyan uppercase tracking-widest transition-colors px-3 py-2 rounded-xl hover:bg-brand-cyan/10">
-                            Role
-                          </button>
-                        </form>
                         <form action={removeUser.bind(null, u.id)}>
                           <button className="bg-gray-100 hover:bg-brand-pink/10 text-gray-400 hover:text-brand-pink p-2.5 rounded-xl transition-all border border-transparent hover:border-brand-pink/20">
                             <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>

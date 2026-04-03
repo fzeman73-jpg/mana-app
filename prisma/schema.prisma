@@ -21,6 +21,7 @@ model User {
   image         String?
   role          Role      @default(USER)
   isAllowed     Boolean   @default(false)
+  password      String?
 
   accounts      Account[]
   sessions      Session[]
