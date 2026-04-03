@@ -4,7 +4,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
 import { revalidatePath } from "next/cache"
 
-// --- Helper ---
+// --- Helpers ---
 
 async function requireAdmin() {
   const session = await auth()
@@ -14,10 +14,18 @@ async function requireAdmin() {
   if (caller?.role !== "ADMIN") throw new Error("Přístup odepřen")
 }
 
-// --- ADMIN: Firemní parametry ---
+async function requireAdminOrManager() {
+  const session = await auth()
+  const email = session?.user?.email
+  if (!email) throw new Error("Nepřihlášen")
+  const caller = await prisma.user.findUnique({ where: { email } })
+  if (caller?.role !== "ADMIN" && caller?.role !== "MANAGER") throw new Error("Přístup odepřen")
+}
+
+// --- ADMIN + MANAGER: Firemní parametry ---
 
 export async function updateCompanyParameters(formData: FormData) {
-  await requireAdmin()
+  await requireAdminOrManager()
 
   const data = {
     currentEbitda:     parseFloat(formData.get("currentEbitda") as string)     || 0,
@@ -89,8 +97,10 @@ export async function adminDeleteKpiTask(taskId: string, userId: string) {
   revalidatePath(`/admin/user/${userId}`)
 }
 
+// --- ADMIN + MANAGER: Označení KPI úkolu ---
+
 export async function adminToggleKpiTask(taskId: string, current: boolean, userId: string) {
-  await requireAdmin()
+  await requireAdminOrManager()
   await prisma.kpiTask.update({
     where: { id: taskId },
     data:  { isCompleted: !current },
@@ -102,18 +112,20 @@ export async function adminToggleKpiTask(taskId: string, current: boolean, userI
 // --- ADMIN: Správa přístupu ---
 
 export async function inviteUser(formData: FormData) {
+  await requireAdmin()
   const email = formData.get("email") as string
   const name  = formData.get("name") as string
 
   await prisma.user.upsert({
     where:  { email },
     update: { isAllowed: true },
-    create: { email, name, isAllowed: true, role: "MANAGER" },
+    create: { email, name, isAllowed: true, role: "USER" },
   })
   revalidatePath("/admin")
 }
 
 export async function removeUser(userId: string) {
+  await requireAdmin()
   await prisma.user.update({
     where: { id: userId },
     data:  { isAllowed: false },
@@ -122,7 +134,13 @@ export async function removeUser(userId: string) {
 }
 
 export async function toggleUserRole(userId: string, currentRole: string) {
-  const newRole = currentRole === "ADMIN" ? "MANAGER" : "ADMIN"
+  await requireAdmin()
+  const next: Record<string, "USER" | "MANAGER" | "ADMIN"> = {
+    USER:    "MANAGER",
+    MANAGER: "ADMIN",
+    ADMIN:   "USER",
+  }
+  const newRole = next[currentRole] ?? "USER"
   await prisma.user.update({
     where: { id: userId },
     data:  { role: newRole },

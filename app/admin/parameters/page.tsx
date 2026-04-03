@@ -9,7 +9,7 @@ const fmt = (n: number) => Intl.NumberFormat('cs-CZ').format(n)
 export default async function ParametersPage() {
   const session = await auth()
   const caller = await prisma.user.findUnique({ where: { email: session?.user?.email || "" } })
-  if (caller?.role !== "ADMIN") redirect("/")
+  if (caller?.role !== "ADMIN" && caller?.role !== "MANAGER") redirect("/")
 
   const p = await prisma.companyParameters.findUnique({ where: { id: "global" } })
 

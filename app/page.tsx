@@ -85,7 +85,8 @@ export default async function Home() {
   const doneKpiW    = kpiTasks.filter(t => t.isCompleted).reduce((s, t) => s + t.weight, 0)
   const kpiAch      = totalKpiW > 0 ? doneKpiW / totalKpiW : 0
 
-  const isAdmin = userRole === "ADMIN"
+  const isAdmin   = userRole === "ADMIN"
+  const isManager = userRole === "MANAGER"
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 font-sans selection:bg-brand-cyan/20">
@@ -98,16 +99,16 @@ export default async function Home() {
           <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest italic">Cockpit</span>
         </div>
         <div className="flex items-center gap-5">
+          {(isAdmin || isManager) && (
+            <a href="/admin/parameters" className="text-gray-400 hover:text-brand-cyan text-[10px] font-black uppercase tracking-widest transition-colors">
+              Parameters
+            </a>
+          )}
           {isAdmin && (
-            <>
-              <a href="/admin/parameters" className="text-gray-400 hover:text-brand-cyan text-[10px] font-black uppercase tracking-widest transition-colors">
-                Parameters
-              </a>
-              <a href="/admin" className="bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/30 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-cyan hover:text-brand-navy transition-all flex items-center gap-2 group">
-                <span className="w-1.5 h-1.5 bg-brand-cyan rounded-full animate-pulse group-hover:bg-brand-navy" />
-                User Control
-              </a>
-            </>
+            <a href="/admin" className="bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/30 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-cyan hover:text-brand-navy transition-all flex items-center gap-2 group">
+              <span className="w-1.5 h-1.5 bg-brand-cyan rounded-full animate-pulse group-hover:bg-brand-navy" />
+              User Control
+            </a>
           )}
           <div className="text-right hidden sm:block leading-none">
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1.5">Executive Unit</p>
@@ -279,14 +280,13 @@ export default async function Home() {
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-[9px] font-black text-brand-cyan bg-gray-100 px-3 py-1 rounded-full border border-gray-200">{t.weight}%</span>
-                      {isAdmin && (
+                      {(isAdmin || isManager) ? (
                         <form action={adminToggleKpiTask.bind(null, t.id, t.isCompleted, userId)}>
                           <button className={`text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-wider border transition-all ${t.isCompleted ? 'border-brand-green/30 text-brand-green hover:bg-brand-green/20' : 'border-gray-200 text-gray-400 hover:border-brand-cyan hover:text-brand-cyan'}`}>
                             {t.isCompleted ? 'Splněno' : 'Čeká'}
                           </button>
                         </form>
-                      )}
-                      {!isAdmin && (
+                      ) : (
                         <span className={`text-[9px] font-black px-3 py-1 rounded-full uppercase border ${t.isCompleted ? 'border-brand-green/30 text-brand-green' : 'border-gray-200 text-gray-400'}`}>
                           {t.isCompleted ? 'Splněno' : 'Čeká'}
                         </span>
