@@ -67,7 +67,7 @@ export default async function ReportsPage({
         params,
         comp.targetBonusAnnual,
         kpiTasks.map(t => ({ weight: t.weight, isCompleted: t.isCompleted })),
-        0
+        (comp as unknown as { kpiWeight: number }).kpiWeight ?? 0
       )
 
       const pop = vestingBase ? calcPOP({

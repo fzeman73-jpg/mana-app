@@ -103,7 +103,7 @@ export default async function Home() {
     paramInputs,
     compensation?.targetBonusAnnual ?? 0,
     kpiTasks.map(t => ({ weight: t.weight, isCompleted: t.isCompleted })),
-    0 // KPI váha je součástí targetBonusAnnual přes individuální úkoly
+    compensation?.kpiWeight ?? 0
   )
 
   // KPI plnění

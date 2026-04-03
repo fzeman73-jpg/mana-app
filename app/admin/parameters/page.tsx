@@ -490,6 +490,12 @@ export default async function ParametersPage({
                       <div className="grid grid-cols-2 gap-4">
                         <div><Label>Základní plat / měs. (CZK)</Label><input name="baseSalary" type="number" defaultValue={compensation?.baseSalary ?? 0} className={inputCls} /></div>
                         <div><Label>Roční cílový bonus (CZK)</Label><input name="targetBonusAnnual" type="number" defaultValue={compensation?.targetBonusAnnual ?? 0} className={inputCls} /></div>
+                        <div>
+                          <Label>KPI váha (% z bonusu)</Label>
+                          <input name="kpiWeight" type="number" step="0.1" min="0" max="100"
+                            defaultValue={(compensation as { kpiWeight?: number })?.kpiWeight ?? 0} className={inputCls} />
+                          <p className="text-[9px] text-gray-400 mt-1">Kolik % z cílového bonusu tvoří KPI složka. 0 = KPI bonus nepočítá.</p>
+                        </div>
                       </div>
 
                       <div className="pt-4 border-t border-gray-100">

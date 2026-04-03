@@ -172,6 +172,7 @@ model Compensation {
 
   // Variabilní složka
   targetBonusAnnual Float    @default(0)   // roční cílový bonus CZK
+  kpiWeight         Float    @default(0)   // % z bonusu tvořené KPI složkou (0 = KPI nehraje roli)
 
   // POP
   sharePercent      Float    @default(0)   // podíl v % z vytvořené hodnoty

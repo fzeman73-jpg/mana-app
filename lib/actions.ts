@@ -315,6 +315,7 @@ export async function adminSetCompensation(userId: string, periodId: string, for
   const data = {
     baseSalary:        parseFloat(formData.get("baseSalary") as string)        || 0,
     targetBonusAnnual: parseFloat(formData.get("targetBonusAnnual") as string) || 0,
+    kpiWeight:         parseFloat(formData.get("kpiWeight") as string)         || 0,
     sharePercent:      parseFloat(formData.get("sharePercent") as string)      || 0,
     grantEbitda:       parseFloat(formData.get("grantEbitda") as string)       || 0,
     grantMultiplier:   parseFloat(formData.get("grantMultiplier") as string)   || 0,
@@ -410,7 +411,7 @@ export async function closeQuarter(periodId: string, quarter: number, year: numb
       paramInputs,
       comp.targetBonusAnnual,
       kpiTasks.map(t => ({ weight: t.weight, isCompleted: t.isCompleted })),
-      0
+      (comp as unknown as { kpiWeight: number }).kpiWeight ?? 0
     )
 
     // Výpočet POP
