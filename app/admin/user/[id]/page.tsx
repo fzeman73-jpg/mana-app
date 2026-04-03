@@ -1,6 +1,6 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
-import { adminSetCompensation, adminAddMetric, adminDeleteMetric } from "@/lib/actions"
+import { adminSetCompensation, adminAddKpiTask, adminDeleteKpiTask } from "@/lib/actions"
 import Image from "next/image"
 import { redirect, notFound } from "next/navigation"
 
@@ -17,12 +17,12 @@ export default async function UserAdminPage({ params }: { params: Promise<{ id: 
   // Načtení spravovaného uživatele
   const managed = await prisma.user.findUnique({
     where: { id },
-    include: { compensation: true, metrics: { orderBy: { name: 'asc' } } }
+    include: { compensation: true, kpiTasks: { orderBy: { name: 'asc' } } }
   })
   if (!managed) notFound()
 
-  const comp    = managed.compensation
-  const metrics = managed.metrics
+  const comp     = managed.compensation
+  const kpiTasks = managed.kpiTasks
 
   return (
     <div className="min-h-screen bg-brand-navy p-8 font-sans selection:bg-brand-cyan/20">
@@ -89,7 +89,7 @@ export default async function UserAdminPage({ params }: { params: Promise<{ id: 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-brand-cyan/60 uppercase tracking-widest block ml-1">Share %</label>
-                  <input name="popUnits" type="number" step="0.01" defaultValue={comp?.popUnits ?? 0} className="w-full bg-brand-navy-deep rounded-2xl px-6 py-4 font-black border-2 border-brand-cyan/10 focus:border-brand-cyan outline-none transition-all text-brand-cyan shadow-inner" />
+                  <input name="sharePercent" type="number" step="0.01" defaultValue={comp?.sharePercent ?? 0} className="w-full bg-brand-navy-deep rounded-2xl px-6 py-4 font-black border-2 border-brand-cyan/10 focus:border-brand-cyan outline-none transition-all text-brand-cyan shadow-inner" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-brand-cyan/60 uppercase tracking-widest block ml-1">Grant EBITDA</label>
@@ -113,28 +113,28 @@ export default async function UserAdminPage({ params }: { params: Promise<{ id: 
           <h2 className="text-brand-cyan text-[11px] font-black uppercase tracking-[0.4em] mb-8 italic">Strategic Boosters</h2>
 
           {/* Přidání nového metriku */}
-          <form action={adminAddMetric.bind(null, managed.id)} className="flex flex-col sm:flex-row gap-4 mb-10 bg-brand-navy p-4 rounded-3xl border border-brand-cyan/10">
+          <form action={adminAddKpiTask.bind(null, managed.id)} className="flex flex-col sm:flex-row gap-4 mb-10 bg-brand-navy p-4 rounded-3xl border border-brand-cyan/10">
             <input name="name" placeholder="Název strategického cíle..." className="flex-1 bg-transparent px-6 py-3 outline-none font-bold text-sm text-white placeholder:text-white/20" required />
             <div className="flex gap-2">
-              <input name="multiplierImpact" type="number" step="0.1" placeholder="+0.2" className="w-24 bg-brand-navy-card rounded-2xl px-4 py-3 text-center font-black shadow-sm text-brand-cyan outline-none border-2 border-brand-cyan/20 focus:border-brand-cyan transition-all" required />
+              <input name="weight" type="number" step="0.1" placeholder="+0.2" className="w-24 bg-brand-navy-card rounded-2xl px-4 py-3 text-center font-black shadow-sm text-brand-cyan outline-none border-2 border-brand-cyan/20 focus:border-brand-cyan transition-all" required />
               <button type="submit" className="bg-brand-cyan text-brand-navy px-8 py-3 rounded-2xl font-black hover:bg-brand-pink hover:text-white transition-all text-[10px] uppercase tracking-widest active:scale-95 shadow-xl">Add</button>
             </div>
           </form>
 
           {/* Seznam metrik */}
           <div className="space-y-3">
-            {metrics.length === 0 ? (
+            {kpiTasks.length === 0 ? (
               <div className="text-center text-white/20 py-12 font-bold text-sm italic border-4 border-dotted border-brand-cyan/10 rounded-[2rem]">
                 Žádné strategické boostery zatím nebyly přidány.
               </div>
             ) : (
-              metrics.map((m) => (
+              kpiTasks.map((m) => (
                 <div key={m.id} className={`flex items-center justify-between p-5 rounded-[1.5rem] border transition-all ${m.isCompleted ? 'bg-brand-green/10 border-brand-green/20' : 'bg-brand-navy border-brand-cyan/10'}`}>
                   <div className="flex items-center gap-4">
                     <div className={`w-3 h-3 rounded-full ${m.isCompleted ? 'bg-brand-green' : 'bg-brand-cyan/20'}`}></div>
                     <div>
                       <p className={`font-black text-[13px] uppercase tracking-tight ${m.isCompleted ? 'text-brand-green italic' : 'text-white'}`}>{m.name}</p>
-                      <p className="text-[9px] font-black text-brand-pink tracking-[0.2em] mt-1 opacity-70">+{m.multiplierImpact.toFixed(1)}x</p>
+                      <p className="text-[9px] font-black text-brand-pink tracking-[0.2em] mt-1 opacity-70">+{m.weight.toFixed(1)}x</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
