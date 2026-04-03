@@ -151,6 +151,11 @@ export default async function Home() {
             </a>
           )}
           {isAdmin && (
+            <a href="/admin/reports" className="text-gray-400 hover:text-brand-cyan text-[10px] font-black uppercase tracking-widest transition-colors">
+              Reporty
+            </a>
+          )}
+          {isAdmin && (
             <a href="/admin" className="bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/30 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-cyan hover:text-brand-navy transition-all">
               Uživatelé
             </a>
@@ -282,7 +287,7 @@ export default async function Home() {
                     </h2>
                     <div className="text-right">
                       <p className="text-[9px] text-gray-400 uppercase tracking-wider">Projekce celkem</p>
-                      <p className="font-black text-xl text-brand-cyan">{fmt(bonusBreakdown.total + (compensation?.targetBonusAnnual ?? 0) * kpiAch / 100)} CZK</p>
+                      <p className="font-black text-xl text-brand-cyan">{fmt(bonusBreakdown.total)} CZK</p>
                     </div>
                   </div>
 

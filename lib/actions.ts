@@ -434,3 +434,26 @@ export async function closeQuarter(periodId: string, quarter: number, year: numb
   revalidatePath("/admin/parameters")
   revalidatePath("/")
 }
+
+// ─── VESTING PLATBY ───────────────────────────────────────────────────────────
+
+export async function markVestingPaid(compensationId: string, vestingYear: number, formData: FormData) {
+  const caller = await requireAdmin()
+  const amount = parseFloat(formData.get("amount") as string) || null
+
+  await prisma.vestingPayment.upsert({
+    where:  { compensationId_vestingYear: { compensationId, vestingYear } },
+    update: { isPaid: true, paidAt: new Date(), amount: amount ?? undefined },
+    create: { compensationId, vestingYear, percentage: 0, isPaid: true, paidAt: new Date(), amount: amount ?? undefined },
+  })
+
+  await audit(caller.email!, "MARK_VESTING_PAID", `Compensation:${compensationId}`, undefined, { vestingYear, amount })
+  revalidatePath("/admin/reports")
+}
+
+export async function markVestingUnpaid(compensationId: string, vestingYear: number) {
+  const caller = await requireAdmin()
+  await prisma.vestingPayment.deleteMany({ where: { compensationId, vestingYear } })
+  await audit(caller.email!, "MARK_VESTING_UNPAID", `Compensation:${compensationId}`, undefined, { vestingYear })
+  revalidatePath("/admin/reports")
+}

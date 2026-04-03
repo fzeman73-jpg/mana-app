@@ -1,6 +1,6 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
-import { inviteUser, removeUser } from "@/lib/actions"
+import { inviteUser, removeUser, createDivision, deleteDivision } from "@/lib/actions"
 import Image from "next/image"
 import { redirect } from "next/navigation"
 
@@ -10,10 +10,17 @@ export default async function AdminPage() {
   const caller = await prisma.user.findUnique({ where: { email: session?.user?.email || "" } })
   if (caller?.role !== "ADMIN") redirect("/")
 
-  const allowedUsers = await prisma.user.findMany({
-    where: { isAllowed: true },
-    orderBy: { email: "asc" },
-  })
+  const [allowedUsers, divisions] = await Promise.all([
+    prisma.user.findMany({
+      where: { isAllowed: true },
+      include: { division: true },
+      orderBy: { email: "asc" },
+    }),
+    prisma.division.findMany({
+      include: { _count: { select: { users: true } } },
+      orderBy: { name: "asc" },
+    }),
+  ])
 
   return (
     <div className="min-h-screen bg-gray-50 p-8 font-sans selection:bg-brand-cyan/20">
@@ -59,6 +66,40 @@ export default async function AdminPage() {
           <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-brand-cyan rounded-full opacity-5 blur-[100px]" />
         </section>
 
+        {/* DIVIZE */}
+        <section className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100">
+          <h3 className="font-black text-gray-900 uppercase italic tracking-tight mb-6">Divize</h3>
+
+          {divisions.length > 0 && (
+            <div className="flex flex-wrap gap-3 mb-6">
+              {divisions.map(d => (
+                <div key={d.id} className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-gray-200 bg-gray-50">
+                  <div>
+                    <p className="font-black text-gray-900 text-sm">{d.name}</p>
+                    {d.description && <p className="text-[10px] text-gray-400">{d.description}</p>}
+                    <p className="text-[9px] text-brand-cyan font-black uppercase tracking-wider mt-0.5">{d._count.users} uživatelů</p>
+                  </div>
+                  <form action={deleteDivision.bind(null, d.id)} className="ml-2">
+                    <button className="text-gray-300 hover:text-brand-pink transition-colors p-1" title="Smazat divizi">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                    </button>
+                  </form>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <form action={createDivision} className="flex flex-wrap gap-3">
+            <input name="name" placeholder="Název divize" required
+              className="flex-1 min-w-[160px] bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900" />
+            <input name="description" placeholder="Popis (volitelný)"
+              className="flex-[2] min-w-[200px] bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900" />
+            <button type="submit" className="bg-brand-cyan text-brand-navy hover:bg-brand-pink hover:text-white transition-all px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-sm active:scale-95 whitespace-nowrap">
+              + Přidat divizi
+            </button>
+          </form>
+        </section>
+
         {/* TABULKA UŽIVATELŮ */}
         <section className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-8 border-b border-gray-100 flex justify-between items-center">
@@ -74,6 +115,7 @@ export default async function AdminPage() {
                 <tr className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
                   <th className="px-8 py-5">Uživatel</th>
                   <th className="px-8 py-5">Úroveň</th>
+                  <th className="px-8 py-5">Divize</th>
                   <th className="px-8 py-5 text-right">Akce</th>
                 </tr>
               </thead>
@@ -92,11 +134,18 @@ export default async function AdminPage() {
                       </div>
                     </td>
                     <td className="px-8 py-6">
-                      <span className={`text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest ${u.role === "ADMIN" ? "bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/30" : "bg-gray-100 text-gray-400 border border-gray-200"}`}>
+                      <span className={`text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest ${
+                        u.role === "ADMIN"   ? "bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/30"   :
+                        u.role === "MANAGER" ? "bg-brand-pink/10 text-brand-pink ring-1 ring-brand-pink/30"   :
+                                               "bg-gray-100 text-gray-400 border border-gray-200"
+                      }`}>
                         {u.role}
                       </span>
                     </td>
-<td className="px-8 py-6 text-right">
+                    <td className="px-8 py-6">
+                      <span className="text-[10px] text-gray-500 font-bold">{u.division?.name ?? "—"}</span>
+                    </td>
+                    <td className="px-8 py-6 text-right">
                       <div className="flex justify-end items-center gap-3">
                         <a href={`/admin/user/${u.id}`} className="bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20 hover:bg-brand-cyan hover:text-brand-navy transition-all px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">
                           Nastavení

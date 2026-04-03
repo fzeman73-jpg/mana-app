@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
 import { calcBonus, calcPOP, calcVestingSchedule, yearsSinceDate } from "@/lib/calculator"
+import { markVestingPaid, markVestingUnpaid } from "@/lib/actions"
 import Image from "next/image"
 import { redirect } from "next/navigation"
 
@@ -310,6 +311,79 @@ export default async function ReportsPage({
                   </tbody>
                 </table>
               </div>
+            </section>
+
+            {/* Vesting splátky */}
+            <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+              <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-5">Vesting POP — splátky</h2>
+              <p className="text-[11px] text-gray-400 mb-5">Přehled ročních splátek z Phantom Option Planu. Označte splátky jako vyplacené po provedení výplaty.</p>
+
+              {managerData.some(m => m.vestingSchedule.length > 0) ? (
+                <div className="space-y-4">
+                  {managerData.filter(m => m.vestingSchedule.length > 0).map(({ comp, pop, vestingSchedule, vestingPercent }) => (
+                    <div key={comp.id} className="border border-gray-200 rounded-2xl overflow-hidden">
+                      <div className="px-5 py-3 bg-gray-50 flex items-center justify-between">
+                        <div>
+                          <p className="font-black text-gray-900 text-sm">{comp.user.name ?? comp.user.email}</p>
+                          <p className="text-[10px] text-gray-400">{comp.sharePercent}% · grant {new Date(comp.grantDate).toLocaleDateString('cs-CZ')} · {(comp as { vestingYears: number }).vestingYears ?? 4} let</p>
+                        </div>
+                        <span className={`text-[10px] font-black px-3 py-1 rounded-full ${pop && pop.grossGain > 0 ? "bg-brand-navy/10 text-brand-navy" : "bg-gray-100 text-gray-400"}`}>
+                          Celkem: {pop ? fmt(pop.grossGain) : "0"} CZK
+                        </span>
+                      </div>
+                      <div className="divide-y divide-gray-100">
+                        {vestingSchedule.map(v => {
+                          const payment = comp.payments.find(p => p.vestingYear === v.year)
+                          const isPaid  = payment?.isPaid ?? false
+                          return (
+                            <div key={v.year} className={`flex items-center gap-4 px-5 py-3 ${isPaid ? "bg-brand-green/3" : ""}`}>
+                              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isPaid ? "bg-brand-green" : v.isCurrent ? "bg-brand-cyan" : "bg-gray-300"}`} />
+                              <span className={`text-sm font-black w-14 ${v.isCurrent ? "text-brand-cyan" : "text-gray-500"}`}>
+                                Rok {v.year}
+                              </span>
+                              <span className="text-[10px] text-gray-400 w-10">{v.percentage}%</span>
+                              <span className="font-black text-gray-900 flex-1">{fmt(v.amount)} CZK</span>
+                              {isPaid ? (
+                                <div className="flex items-center gap-3">
+                                  <span className="text-[10px] font-black text-brand-green">
+                                    ✓ Vyplaceno {payment?.paidAt ? new Date(payment.paidAt).toLocaleDateString('cs-CZ') : ""}
+                                    {payment?.amount ? ` · ${fmt(payment.amount)} CZK` : ""}
+                                  </span>
+                                  <form action={markVestingUnpaid.bind(null, comp.id, v.year)}>
+                                    <button className="text-[9px] font-black text-gray-400 hover:text-brand-pink transition-colors uppercase tracking-wider">
+                                      Zrušit
+                                    </button>
+                                  </form>
+                                </div>
+                              ) : (
+                                <form action={markVestingPaid.bind(null, comp.id, v.year)} className="flex items-center gap-2">
+                                  <input
+                                    name="amount"
+                                    type="number"
+                                    step="1"
+                                    placeholder={`${Math.round(v.amount)}`}
+                                    className="w-28 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-bold text-gray-900 outline-none focus:border-brand-cyan"
+                                  />
+                                  <button
+                                    type="submit"
+                                    className="text-[9px] font-black px-3 py-1.5 rounded-xl border border-brand-green/30 text-brand-green hover:bg-brand-green hover:text-white transition-all uppercase tracking-wider"
+                                  >
+                                    Vyplaceno
+                                  </button>
+                                </form>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-400 text-sm italic text-center py-6">
+                  {vestingBase ? "Žádné vesting splátky (manažeři nemají nastaveny POP podmínky)." : "Nejsou nastavena valuační data."}
+                </p>
+              )}
             </section>
 
             {/* Historie snapshots */}

@@ -1,6 +1,6 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
-import { setUserRole, setUserActive, deleteUser, setUserPassword } from "@/lib/actions"
+import { setUserRole, setUserActive, deleteUser, setUserPassword, setUserDivision } from "@/lib/actions"
 import Image from "next/image"
 import { redirect, notFound } from "next/navigation"
 
@@ -11,7 +11,10 @@ export default async function UserAdminPage({ params }: { params: Promise<{ id: 
   const caller = await prisma.user.findUnique({ where: { email: session?.user?.email || "" } })
   if (caller?.role !== "ADMIN") redirect("/")
 
-  const user = await prisma.user.findUnique({ where: { id } })
+  const [user, divisions] = await Promise.all([
+    prisma.user.findUnique({ where: { id } }),
+    prisma.division.findMany({ orderBy: { name: "asc" } }),
+  ])
   if (!user) notFound()
 
   return (
@@ -78,6 +81,29 @@ export default async function UserAdminPage({ params }: { params: Promise<{ id: 
             <span className="font-black text-gray-600">Manažer</span> — úprava parametrů + KPI &nbsp;·&nbsp;
             <span className="font-black text-gray-600">Admin</span> — vše
           </p>
+        </section>
+
+        {/* DIVIZE */}
+        <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+          <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-6">Divize</h2>
+          <form action={setUserDivision.bind(null, user.id)} className="flex gap-3">
+            <select
+              name="divisionId"
+              defaultValue={user.divisionId ?? ""}
+              className="flex-1 bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+            >
+              <option value="">— Bez divize —</option>
+              {divisions.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+            <button type="submit" className="bg-brand-cyan text-brand-navy px-6 py-3.5 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-pink hover:text-white transition-all shadow-sm active:scale-95">
+              Uložit
+            </button>
+          </form>
+          {divisions.length === 0 && (
+            <p className="text-[10px] text-gray-400 mt-3 ml-1">Nejsou vytvořeny žádné divize. Přidejte je na <a href="/admin" className="text-brand-cyan hover:underline">stránce správy uživatelů</a>.</p>
+          )}
         </section>
 
         {/* HESLO */}
