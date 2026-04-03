@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db"
 import {
   createPeriod, deletePeriod, setActivePeriod,
   createPerformanceParameter, updatePerformanceParameter, deletePerformanceParameter,
-  upsertQuarterlyResult, lockQuarter,
+  upsertQuarterlyResult, lockQuarter, unlockQuarter,
   upsertVestingBase, createBooster, toggleBooster, deleteBooster,
   adminSetCompensation, adminAddKpiTask, adminDeleteKpiTask,
   closeQuarter,
@@ -237,7 +237,16 @@ export default async function ParametersPage({
                                       <div className="text-[10px] text-gray-400">
                                         <p>Skutečnost: <span className="font-black text-gray-700">{fmt(r.actual)}</span></p>
                                         <p>Cíl: {fmt(r.target)}</p>
-                                        <p className="text-[9px] text-brand-green mt-1">🔒 Uzavřeno</p>
+                                        <div className="flex items-center justify-between mt-1">
+                                          <p className="text-[9px] text-brand-green">🔒 Uzavřeno</p>
+                                          {isAdmin && (
+                                            <form action={unlockQuarter.bind(null, p.id, q, curY)}>
+                                              <button type="submit" className="text-[8px] font-black text-gray-400 hover:text-brand-pink transition-colors uppercase tracking-wider" title="Odemknout">
+                                                🔓 Odemknout
+                                              </button>
+                                            </form>
+                                          )}
+                                        </div>
                                       </div>
                                     ) : (
                                       <div className="space-y-1.5">

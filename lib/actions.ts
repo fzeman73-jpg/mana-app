@@ -263,6 +263,16 @@ export async function lockQuarter(parameterId: string, quarter: number, year: nu
   revalidatePath("/admin/parameters")
 }
 
+export async function unlockQuarter(parameterId: string, quarter: number, year: number) {
+  const caller = await requireAdmin()
+  await prisma.quarterlyResult.update({
+    where: { parameterId_quarter_year: { parameterId, quarter, year } },
+    data:  { isLocked: false, lockedAt: null, lockedByEmail: null },
+  })
+  await audit(caller.email!, "UNLOCK_QUARTER", `PerformanceParameter:${parameterId}`, undefined, { quarter, year })
+  revalidatePath("/admin/parameters")
+}
+
 // ─── POP – VESTING BASE ───────────────────────────────────────────────────────
 
 export async function upsertVestingBase(periodId: string, formData: FormData) {
