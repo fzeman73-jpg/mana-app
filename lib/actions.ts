@@ -104,25 +104,34 @@ export async function setUserPassword(userId: string, formData: FormData) {
   revalidatePath(`/admin/user/${userId}`)
 }
 
-export async function changeOwnPassword(formData: FormData) {
-  const caller = await getCallerOrThrow()
-  const current  = formData.get("current")  as string
-  const password = formData.get("password")  as string
-  const confirm  = formData.get("confirm")   as string
+export type PasswordState = { error?: string; success?: boolean }
 
-  if (!password || password.length < 6) throw new Error("Nové heslo musí mít alespoň 6 znaků")
-  if (password !== confirm) throw new Error("Hesla se neshodují")
+export async function changeOwnPassword(
+  _prev: PasswordState,
+  formData: FormData
+): Promise<PasswordState> {
+  try {
+    const caller = await getCallerOrThrow()
+    const current  = formData.get("current")  as string
+    const password = formData.get("password")  as string
+    const confirm  = formData.get("confirm")   as string
 
-  // Ověření stávajícího hesla (pokud má nastavené)
-  if (caller.password) {
-    const ok = await bcrypt.compare(current, caller.password)
-    if (!ok) throw new Error("Stávající heslo není správné")
+    if (!password || password.length < 6) return { error: "Nové heslo musí mít alespoň 6 znaků" }
+    if (password !== confirm) return { error: "Hesla se neshodují" }
+
+    if (caller.password) {
+      const ok = await bcrypt.compare(current, caller.password)
+      if (!ok) return { error: "Stávající heslo není správné" }
+    }
+
+    const hashed = await bcrypt.hash(password, 12)
+    await prisma.user.update({ where: { id: caller.id }, data: { password: hashed } })
+    await audit(caller.email!, "CHANGE_OWN_PASSWORD", `User:${caller.id}`)
+    revalidatePath("/settings")
+    return { success: true }
+  } catch {
+    return { error: "Nastala neočekávaná chyba. Zkuste to znovu." }
   }
-
-  const hashed = await bcrypt.hash(password, 12)
-  await prisma.user.update({ where: { id: caller.id }, data: { password: hashed } })
-  await audit(caller.email!, "CHANGE_OWN_PASSWORD", `User:${caller.id}`)
-  revalidatePath("/settings")
 }
 
 export async function setUserDivision(userId: string, formData: FormData) {
@@ -463,10 +472,17 @@ export async function markVestingPaid(compensationId: string, vestingYear: numbe
   const caller = await requireAdmin()
   const amount = parseFloat(formData.get("amount") as string) || null
 
+  // Načti vestingPercent z Compensation aby percentage nebylo 0
+  const comp = await prisma.compensation.findUnique({
+    where: { id: compensationId },
+    select: { vestingPercent: true },
+  })
+  const percentage = (comp as { vestingPercent: number } | null)?.vestingPercent ?? 25
+
   await prisma.vestingPayment.upsert({
     where:  { compensationId_vestingYear: { compensationId, vestingYear } },
     update: { isPaid: true, paidAt: new Date(), amount: amount ?? undefined },
-    create: { compensationId, vestingYear, percentage: 0, isPaid: true, paidAt: new Date(), amount: amount ?? undefined },
+    create: { compensationId, vestingYear, percentage, isPaid: true, paidAt: new Date(), amount: amount ?? undefined },
   })
 
   await audit(caller.email!, "MARK_VESTING_PAID", `Compensation:${compensationId}`, undefined, { vestingYear, amount })

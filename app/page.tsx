@@ -10,7 +10,7 @@ const pct = (n: number) => `${Math.round(n * 100)}%`
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; y?: string }>
+  searchParams: Promise<{ q?: string; y?: string; periodId?: string }>
 }) {
   const session = await auth()
 
@@ -62,10 +62,15 @@ export default async function Home({
   const isManager = dbUser.role === "MANAGER"
   const canEdit   = isAdmin || isManager
 
-  // Aktivní období
-  const period = await prisma.period.findFirst({ where: { isActive: true } })
+  const { q, y, periodId: pidParam } = await searchParams
 
-  // Data pro aktivní období
+  // Všechna období (pro selector) + vybrané
+  const allPeriods = await prisma.period.findMany({ orderBy: { startDate: "desc" } })
+  const period = pidParam
+    ? (allPeriods.find(p => p.id === pidParam) ?? allPeriods.find(p => p.isActive) ?? null)
+    : (allPeriods.find(p => p.isActive) ?? null)
+
+  // Data pro vybrané období
   const [compensation, kpiTasks, perfParams, vestingBase, boosters, snapshots] = period
     ? await Promise.all([
         prisma.compensation.findUnique({ where: { userId_periodId: { userId: dbUser.id, periodId: period.id } } }),
@@ -86,7 +91,6 @@ export default async function Home({
     : [null, [], [], null, [], []]
 
   const { quarter: nowQ, year: nowY } = currentQuarter()
-  const { q, y } = await searchParams
   const curQ = q ? parseInt(q) : nowQ
   const curY = y ? parseInt(y) : nowY
 
@@ -133,12 +137,16 @@ export default async function Home({
   }) : null
 
   // Vesting
+  const yearsFromGrant = yearsSinceDate(compensation?.grantDate ?? new Date())
   const vestingSchedule = (popResult && compensation) ? calcVestingSchedule({
     grossGain:       popResult.grossGain,
     vestingYears:    compensation.vestingYears,
     vestingPercent:  compensation.vestingPercent,
-    yearsSinceGrant: yearsSinceDate(compensation.grantDate),
+    yearsSinceGrant: yearsFromGrant,
   }) : []
+
+  // Příští nevyplacená splátka
+  const nextVesting = vestingSchedule.find(v => v.year > yearsFromGrant) ?? null
 
   const noData = !period || !compensation
 
@@ -150,21 +158,30 @@ export default async function Home({
         <div className="flex items-center gap-3">
           <a href="/"><Image src="/algotech-logo.png" alt="Algotech" width={150} height={44} className="object-contain" /></a>
           <span className="w-px h-6 bg-gray-200" />
-          {period
-            ? <span className="text-[10px] font-black text-brand-cyan/70 uppercase tracking-widest">{period.name}</span>
-            : <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Žádné aktivní období</span>
-          }
+          {/* Výběr období */}
+          <div className="flex items-center gap-1.5">
+            {allPeriods.map(p => (
+              <a key={p.id} href={`/?periodId=${p.id}&y=${nowY}&q=${nowQ}`}
+                className={`px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all border ${p.id === period?.id ? "bg-brand-cyan text-brand-navy border-brand-cyan" : "border-gray-200 text-gray-400 hover:border-brand-cyan hover:text-brand-cyan"}`}>
+                {p.name}
+                {p.isActive && <span className="ml-1 opacity-60">●</span>}
+              </a>
+            ))}
+            {allPeriods.length === 0 && (
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Žádné aktivní období</span>
+            )}
+          </div>
           {period && (
-            <div className="flex items-center gap-1 ml-2">
+            <div className="flex items-center gap-1">
               {availableYears.map(yr => (
-                <a key={yr} href={`/?y=${yr}&q=${yr === curY ? curQ : 1}`}
+                <a key={yr} href={`/?periodId=${period.id}&y=${yr}&q=${yr === curY ? curQ : 1}`}
                   className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all ${yr === curY ? "bg-brand-navy text-white" : "text-gray-400 hover:text-brand-navy"}`}>
                   {yr}
                 </a>
               ))}
               <span className="w-px h-4 bg-gray-200 mx-1" />
               {[1, 2, 3, 4].map(qn => (
-                <a key={qn} href={`/?y=${curY}&q=${qn}`}
+                <a key={qn} href={`/?periodId=${period.id}&y=${curY}&q=${qn}`}
                   className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all ${qn === curQ ? "bg-brand-cyan text-brand-navy" : "text-gray-400 hover:text-brand-cyan"}`}>
                   Q{qn}
                 </a>
@@ -284,10 +301,19 @@ export default async function Home({
                 {vestingSchedule.length > 0 && (
                   <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
                     <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-4">Vesting POP</h2>
-                    <p className="text-[10px] text-gray-400 mb-4">
+                    <p className="text-[10px] text-gray-400 mb-3">
                       {compensation?.vestingPercent}% ročně · {compensation?.vestingYears} let ·
                       Grant: {compensation?.grantDate ? new Date(compensation.grantDate).toLocaleDateString('cs-CZ') : "—"}
                     </p>
+                    {nextVesting && (
+                      <div className="mb-4 px-4 py-3 bg-brand-navy/5 rounded-2xl border border-brand-navy/10 flex justify-between items-center">
+                        <div>
+                          <p className="text-[9px] font-black text-brand-navy/50 uppercase tracking-widest">Příští splátka (rok {nextVesting.year})</p>
+                          <p className="font-black text-brand-navy text-lg">{fmt(nextVesting.amount)} CZK</p>
+                        </div>
+                        <span className="text-2xl">📅</span>
+                      </div>
+                    )}
                     <div className="space-y-2">
                       {vestingSchedule.map(v => (
                         <div key={v.year} className={`flex justify-between items-center px-3 py-2 rounded-xl ${v.isCurrent ? "bg-brand-cyan/10 border border-brand-cyan/20" : "bg-gray-50"}`}>

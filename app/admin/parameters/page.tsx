@@ -17,14 +17,14 @@ const pct  = (n: number) => `${n}%`
 export default async function ParametersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodId?: string; userId?: string; tab?: string }>
+  searchParams: Promise<{ periodId?: string; userId?: string; tab?: string; year?: string }>
 }) {
   const session = await auth()
   const caller  = await prisma.user.findUnique({ where: { email: session?.user?.email || "" } })
   if (caller?.role !== "ADMIN" && caller?.role !== "MANAGER") redirect("/")
   const isAdmin = caller?.role === "ADMIN"
 
-  const { periodId, userId, tab = "firma" } = await searchParams
+  const { periodId, userId, tab = "firma", year } = await searchParams
 
   const [periods, users] = await Promise.all([
     prisma.period.findMany({ orderBy: { startDate: "desc" } }),
@@ -54,13 +54,21 @@ export default async function ParametersPage({
 
   const now   = new Date()
   const curQ  = Math.ceil((now.getMonth() + 1) / 3)
-  const curY  = now.getFullYear()
+  const nowY  = now.getFullYear()
+  const curY  = year ? parseInt(year) : nowY
+
+  // Dostupné roky z výsledků parametrů
+  const availableYears: number[] = Array.from(
+    new Set(perfParams.flatMap(p => p.results.map(r => r.year as number)))
+  ).sort()
+  if (!availableYears.includes(nowY)) availableYears.push(nowY)
 
   const href = (params: Record<string, string | undefined>) => {
     const base: Record<string, string> = {}
     if (periodId) base.periodId = periodId
     if (userId)   base.userId   = userId
     if (tab)      base.tab      = tab
+    if (year)     base.year     = year
     Object.assign(base, params)
     return `/admin/parameters?${new URLSearchParams(Object.fromEntries(Object.entries(base).filter(([,v]) => v))).toString()}`
   }
@@ -152,8 +160,23 @@ export default async function ParametersPage({
 
             {/* Výkonnostní parametry */}
             <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-              <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-5">Výkonnostní parametry</h2>
-              <p className="text-[11px] text-gray-400 mb-5">Definujte parametry pro výpočet bonusu. Celková váha by měla být 100&nbsp;%. Bariéra = min. % plnění, pod ním je složka nulová.</p>
+              <div className="flex items-start justify-between mb-5 gap-4 flex-wrap">
+                <div>
+                  <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-1">Výkonnostní parametry</h2>
+                  <p className="text-[11px] text-gray-400">Celková váha by měla být 100&nbsp;%. Bariéra = min. % plnění, pod ním je složka nulová.</p>
+                </div>
+                {availableYears.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mr-1">Rok:</span>
+                    {availableYears.map(yr => (
+                      <a key={yr} href={href({ year: String(yr) })}
+                        className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all border ${yr === curY ? "bg-brand-navy text-white border-brand-navy" : "border-gray-200 text-gray-400 hover:border-brand-navy hover:text-brand-navy"}`}>
+                        {yr}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {perfParams.length > 0 && (
                 <div className="space-y-3 mb-6">
