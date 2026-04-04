@@ -49,7 +49,7 @@ export default async function AdminPage() {
               Reporty
             </a>
             <a href="/admin/parameters" className="flex items-center gap-2 bg-brand-pink/10 text-brand-pink border border-brand-pink/30 px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-brand-pink hover:text-white transition-all shadow-sm">
-              Parametry
+              Nastavení Plánů
             </a>
             <a href="/" className="flex items-center gap-2 bg-brand-cyan text-brand-navy px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-brand-pink hover:text-white transition-all shadow-sm">
               ← Cockpit
@@ -157,7 +157,7 @@ export default async function AdminPage() {
                           Nastavení
                         </a>
                         <a href={`/admin/parameters?userId=${u.id}`} className="bg-brand-pink/10 text-brand-pink border border-brand-pink/20 hover:bg-brand-pink hover:text-white transition-all px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">
-                          Parametry
+                          Plány
                         </a>
                         <form action={removeUser.bind(null, u.id)}>
                           <button className="bg-gray-100 hover:bg-brand-pink/10 text-gray-400 hover:text-brand-pink p-2.5 rounded-xl transition-all border border-transparent hover:border-brand-pink/20">

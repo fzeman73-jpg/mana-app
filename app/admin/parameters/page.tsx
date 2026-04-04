@@ -110,7 +110,7 @@ export default async function ParametersPage({
           <div className="w-px h-7 bg-gray-200" />
           <div>
             <h1 className="text-sm font-black italic uppercase tracking-tight text-gray-900">
-              <span className="text-brand-pink">Parametry</span>
+              <span className="text-brand-pink">Nastavení Plánů</span>
             </h1>
             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Firemní metriky · Odměny · POP</p>
           </div>

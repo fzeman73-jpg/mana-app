@@ -207,7 +207,7 @@ export default async function Home({
           <div className="flex items-center gap-3 sm:gap-5">
             {(isAdmin || isManager) && (
               <a href="/admin/parameters" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors">
-                Parametry
+                Plány
               </a>
             )}
             {isAdmin && (

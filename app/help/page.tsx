@@ -47,7 +47,7 @@ export default async function HelpPage() {
             <div className="mt-5 flex flex-wrap gap-2">
               {[
                 { label: "Admin", desc: "Plný přístup" },
-                { label: "Manažer", desc: "Parametry + Cockpit" },
+                { label: "Manažer", desc: "Nastavení Plánů + Cockpit" },
                 { label: "Viewer", desc: "Pouze čtení" },
               ].map(r => (
                 <span key={r.label} className="text-[10px] font-black px-3 py-1.5 rounded-full bg-white/10 border border-white/20">
@@ -106,7 +106,7 @@ export default async function HelpPage() {
 
         {/* PARAMETRY — jen pro Admin/Manager */}
         {(isAdmin || isManager) && (
-          <Section title="Parametry" color="pink" icon="⚙️">
+          <Section title="Nastavení Plánů" color="pink" icon="⚙️">
             <p>Stránka pro nastavení všech vstupních dat. Přístup mají Admin a Manažer.</p>
 
             <SubSection title="Tab: Firma">
