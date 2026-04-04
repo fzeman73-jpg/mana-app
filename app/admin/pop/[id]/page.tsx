@@ -17,13 +17,13 @@ type PopBooster    = { id: string; name: string; description: string | null; mul
 type PopYearData   = { id: string; year: number; currentEbitda: number }
 type PopPaymentRow = { id: string; vestingYear: number; isPaid: boolean; paidAt: Date | null; amount: number | null }
 type PopAssign     = {
-  id: string; userId: string; sharePercent: number; grantDate: Date; grantEbitda: number
+  id: string; userId: string; sharePercent: number; grantDate: Date; grantEbitda: number  // per-assignment override; falls back to plan.grantEbitda
   payments: PopPaymentRow[]
   user: { id: string; name: string | null; email: string | null; divisionId: string | null }
 }
 type PopPlanFull   = {
   id: string; name: string; description: string | null
-  baseMultiplier: number; vestingYears: number; vestingGranularity: string
+  baseMultiplier: number; grantEbitda: number; vestingYears: number; vestingGranularity: string
   boosters:    PopBooster[]
   yearData:    PopYearData[]
   assignments: PopAssign[]
@@ -104,7 +104,14 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
                 className="bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
               />
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Vstupní EBITDA (CZK)</label>
+                <input
+                  name="grantEbitda" type="number" step="0.01" defaultValue={plan.grantEbitda} required
+                  className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+                />
+              </div>
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Základní multiplikátor</label>
                 <input
@@ -233,9 +240,10 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
           <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-6">Přiřazení manažeři</h2>
 
           {plan.assignments.map(a => {
+            const effectiveGrantEbitda = a.grantEbitda > 0 ? a.grantEbitda : plan.grantEbitda
             const pop = latestYearData ? calcPOP({
               sharePercent:    a.sharePercent,
-              grantEbitda:     a.grantEbitda,
+              grantEbitda:     effectiveGrantEbitda,
               grantMultiplier: plan.baseMultiplier,
               currentEbitda:   latestYearData.currentEbitda,
               baseMultiplier:  plan.baseMultiplier,

@@ -640,6 +640,7 @@ export async function createPopPlan(formData: FormData) {
     name:              formData.get("name") as string,
     description:       (formData.get("description") as string) || undefined,
     baseMultiplier:    parseFloat(formData.get("baseMultiplier") as string) || 6.0,
+    grantEbitda:       parseFloat(formData.get("grantEbitda") as string) || 0,
     vestingYears:      parseInt(formData.get("vestingYears") as string) || 4,
     vestingGranularity: (formData.get("vestingGranularity") as string) || "YEARLY",
   }
@@ -655,6 +656,7 @@ export async function updatePopPlan(planId: string, formData: FormData) {
     name:              formData.get("name") as string,
     description:       (formData.get("description") as string) || undefined,
     baseMultiplier:    parseFloat(formData.get("baseMultiplier") as string) || 6.0,
+    grantEbitda:       parseFloat(formData.get("grantEbitda") as string) || 0,
     vestingYears:      parseInt(formData.get("vestingYears") as string) || 4,
     vestingGranularity: (formData.get("vestingGranularity") as string) || "YEARLY",
   }

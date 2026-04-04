@@ -148,6 +148,7 @@ model PopPlan {
   name               String
   description        String?
   baseMultiplier     Float    @default(6.0)
+  grantEbitda        Float    @default(0)   // vstupní EBITDA plánu (základ pro výpočet grantFirmValue)
   vestingYears       Int      @default(4)
   vestingGranularity String   @default("YEARLY")  // YEARLY | QUARTERLY
 

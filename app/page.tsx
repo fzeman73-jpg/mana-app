@@ -107,7 +107,7 @@ export default async function Home({
     id: string; sharePercent: number; grantDate: Date; grantEbitda: number
     payments: { vestingYear: number; isPaid: boolean; paidAt: Date | null; amount: number | null }[]
     popPlan: {
-      id: string; name: string; baseMultiplier: number; vestingYears: number; vestingGranularity: string
+      id: string; name: string; baseMultiplier: number; grantEbitda: number; vestingYears: number; vestingGranularity: string
       boosters:  { multiplierBoost: number; isAchieved: boolean }[]
       yearData:  { year: number; currentEbitda: number }[]
     }
@@ -176,9 +176,10 @@ export default async function Home({
   // POP – nová architektura (PopAssignment)
   const popCalcs = popAssignments.map(a => {
     const latestYear = a.popPlan.yearData.at(-1)
+    const effectiveGrantEbitda = a.grantEbitda > 0 ? a.grantEbitda : a.popPlan.grantEbitda
     const pop = latestYear ? calcPOP({
       sharePercent:    a.sharePercent,
-      grantEbitda:     a.grantEbitda,
+      grantEbitda:     effectiveGrantEbitda,
       grantMultiplier: a.popPlan.baseMultiplier,
       currentEbitda:   latestYear.currentEbitda,
       baseMultiplier:  a.popPlan.baseMultiplier,
