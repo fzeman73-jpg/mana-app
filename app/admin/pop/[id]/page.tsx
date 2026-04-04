@@ -127,7 +127,7 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
                 />
               </div>
               <div>
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Granularita</label>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Frekvence vyplácení</label>
                 <select
                   name="vestingGranularity" defaultValue={plan.vestingGranularity}
                   className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
@@ -280,8 +280,9 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
 
                 {/* Edit form */}
                 <div className="px-5 py-4 border-b border-gray-200">
-                  <form action={upsertPopAssignment.bind(null, plan.id)} className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+                  <form action={upsertPopAssignment.bind(null, plan.id)} className="grid grid-cols-3 gap-3 items-end">
                     <input type="hidden" name="userId" value={a.userId} />
+                    <input type="hidden" name="grantEbitda" value={plan.grantEbitda} />
                     <div>
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1 ml-1">Podíl %</label>
                       <input
@@ -294,14 +295,6 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
                       <input
                         name="grantDate" type="date" defaultValue={new Date(a.grantDate).toISOString().split("T")[0]}
                         className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1 ml-1">Vstupní EBITDA (CZK)</label>
-                      <input
-                        name="grantEbitda" type="number" step="0.01" defaultValue={a.grantEbitda || ""}
-                        placeholder={`výchozí ${fmt(plan.grantEbitda)}`}
-                        className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
                       />
                     </div>
                     <div className="flex gap-2 items-end">
@@ -361,7 +354,8 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
           })}
 
           {unassignedUsers.length > 0 && (
-            <form action={upsertPopAssignment.bind(null, plan.id)} className="grid grid-cols-1 md:grid-cols-5 gap-3 mt-4 items-end">
+            <form action={upsertPopAssignment.bind(null, plan.id)} className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-4 items-end">
+              <input type="hidden" name="grantEbitda" value={plan.grantEbitda} />
               <div className="md:col-span-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Manažer</label>
                 <select
@@ -386,13 +380,6 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
                 <input
                   name="grantDate" type="date" defaultValue={new Date().toISOString().split("T")[0]}
                   className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Vstupní EBITDA (CZK)</label>
-                <input
-                  name="grantEbitda" type="number" step="0.01" placeholder={`výchozí ${fmt(plan.grantEbitda)}`}
-                  className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
                 />
               </div>
               <div className="flex items-end">
