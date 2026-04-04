@@ -41,12 +41,13 @@ export type BoosterInput = {
 }
 
 export type PopInput = {
-  sharePercent:    number   // podíl v %
-  grantEbitda:     number
-  grantMultiplier: number
-  currentEbitda:   number
-  baseMultiplier:  number
-  boosters:        BoosterInput[]
+  sharePercent:     number   // podíl v %
+  grantEbitda:      number
+  grantMultiplier:  number
+  currentEbitda:    number
+  baseMultiplier:   number
+  boosters:         BoosterInput[]
+  minGrowthPercent: number   // hurdle rate – min. % růstu hodnoty firmy (0 = bez podmínky)
 }
 
 export type PopResult = {
@@ -54,8 +55,10 @@ export type PopResult = {
   currentFirmValue:  number   // EBITDA × multiplier
   grantFirmValue:    number   // při vstupu do plánu
   createdValue:      number   // rozdíl
-  grossGain:         number   // podíl × rozdíl (brutto)
+  grossGain:         number   // podíl × rozdíl (brutto); 0 pokud hurdle nesplněn
   boosterTotal:      number   // součet aktivních boosterů
+  growthPercent:     number   // % růstu hodnoty firmy od grantu
+  hurdleMet:         boolean  // true pokud growth >= minGrowthPercent
 }
 
 export type VestingInput = {
@@ -169,7 +172,11 @@ export function calcPOP(input: PopInput): PopResult {
   const currentFirmValue  = input.currentEbitda * currentMultiplier
   const grantFirmValue    = input.grantEbitda   * input.grantMultiplier
   const createdValue      = Math.max(0, currentFirmValue - grantFirmValue)
-  const grossGain         = createdValue * (input.sharePercent / 100)
+  const growthPercent     = grantFirmValue > 0
+    ? ((currentFirmValue - grantFirmValue) / grantFirmValue) * 100
+    : 0
+  const hurdleMet  = growthPercent >= input.minGrowthPercent
+  const grossGain  = hurdleMet ? createdValue * (input.sharePercent / 100) : 0
 
   return {
     currentMultiplier,
@@ -178,6 +185,8 @@ export function calcPOP(input: PopInput): PopResult {
     createdValue,
     grossGain,
     boosterTotal,
+    growthPercent,
+    hurdleMet,
   }
 }
 

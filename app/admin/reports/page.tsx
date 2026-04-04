@@ -86,12 +86,13 @@ export default async function ReportsPage({
       )
 
       const pop = vestingBase ? calcPOP({
-        sharePercent:    comp.sharePercent,
-        grantEbitda:     comp.grantEbitda,
-        grantMultiplier: comp.grantMultiplier,
-        currentEbitda:   vestingBase.currentEbitda,
-        baseMultiplier:  vestingBase.baseMultiplier,
-        boosters:        boosters.map(b => ({ multiplierBoost: b.multiplierBoost, isAchieved: b.isAchieved })),
+        sharePercent:     comp.sharePercent,
+        grantEbitda:      comp.grantEbitda,
+        grantMultiplier:  comp.grantMultiplier,
+        currentEbitda:    vestingBase.currentEbitda,
+        baseMultiplier:   vestingBase.baseMultiplier,
+        boosters:         boosters.map(b => ({ multiplierBoost: b.multiplierBoost, isAchieved: b.isAchieved })),
+        minGrowthPercent: 0,
       }) : null
 
       const vestingYears   = (comp as { vestingYears: number }).vestingYears ?? 4

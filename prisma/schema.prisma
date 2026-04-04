@@ -156,6 +156,8 @@ model PopPlan {
   vestingPaymentMonth Int     @default(5)   // měsíc vyplacení (YEARLY), např. 5 = 1. května
   // QUARTERLY
   vestingQuarters    Int      @default(16)  // počet čtvrtletí (QUARTERLY)
+  // Hurdle rate – minimální % růstu hodnoty firmy pro vznik nároku (0 = bez podmínky)
+  minGrowthPercent   Float    @default(0)
 
   boosters    PopPlanBooster[]
   yearData    PopYearData[]

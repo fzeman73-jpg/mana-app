@@ -101,7 +101,7 @@ export default async function PopAdminPage() {
                 className="bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
               />
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-4 gap-3">
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Základní multiplikátor</label>
                 <input
@@ -113,6 +113,13 @@ export default async function PopAdminPage() {
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Délka vestingu (roky)</label>
                 <input
                   name="vestingYears" type="number" min="1" max="10" defaultValue="4" required
+                  className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Min. růst hodnoty (%)</label>
+                <input
+                  name="minGrowthPercent" type="number" step="0.1" min="0" defaultValue="0"
                   className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
                 />
               </div>

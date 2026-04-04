@@ -105,6 +105,7 @@ export default async function Home({
       id: string; name: string; baseMultiplier: number; grantEbitda: number
       vestingGranularity: string; vestingYears: number
       vestingPaymentDay: number; vestingPaymentMonth: number; vestingQuarters: number
+      minGrowthPercent: number
       boosters:  { multiplierBoost: number; isAchieved: boolean }[]
       yearData:  { year: number; currentEbitda: number }[]
     }
@@ -173,12 +174,13 @@ export default async function Home({
     const latestYear = a.popPlan.yearData.at(-1)
     const effectiveGrantEbitda = a.grantEbitda > 0 ? a.grantEbitda : a.popPlan.grantEbitda
     const pop = latestYear ? calcPOP({
-      sharePercent: a.sharePercent,
-      grantEbitda: effectiveGrantEbitda,
-      grantMultiplier: a.popPlan.baseMultiplier,
-      currentEbitda: latestYear.currentEbitda,
-      baseMultiplier: a.popPlan.baseMultiplier,
-      boosters: a.popPlan.boosters,
+      sharePercent:     a.sharePercent,
+      grantEbitda:      effectiveGrantEbitda,
+      grantMultiplier:  a.popPlan.baseMultiplier,
+      currentEbitda:    latestYear.currentEbitda,
+      baseMultiplier:   a.popPlan.baseMultiplier,
+      boosters:         a.popPlan.boosters,
+      minGrowthPercent: a.popPlan.minGrowthPercent,
     }) : null
     const schedule = pop ? calcVestingSchedule({
       grossGain: pop.grossGain,
@@ -482,21 +484,59 @@ export default async function Home({
                   {/* Per-plán */}
                   {popCalcs.map(({ assignment: a, pop, schedule }) => pop && (
                     <div key={a.id} className="mt-6 pt-6 border-t border-white/10">
-                      <div className="flex flex-col md:flex-row justify-between items-start gap-6 mb-6">
-                        <div>
-                          <p className="text-xs font-black text-white/40 uppercase tracking-[0.3em] mb-2">{a.popPlan.name} · {a.sharePercent}% podíl · grant {new Date(a.grantDate).getFullYear()}</p>
-                          <p className="text-4xl font-black text-white">{fmt(pop.grossGain)}</p>
-                        </div>
-                        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-2 min-w-[220px]">
-                          <PopRow label="Hodnota firmy dnes" value={fmt(pop.currentFirmValue)} />
-                          <PopRow label="Hodnota při grantu"  value={fmt(pop.grantFirmValue)} />
-                          <PopRow label="Vytvořená hodnota"   value={fmt(pop.createdValue)} accent />
-                          <div className="pt-2 border-t border-white/10">
-                            <PopRow label="Koeficient"        value={`${pop.currentMultiplier.toFixed(1)}×`} />
-                            <PopRow label="z toho boostery"   value={`+${pop.boosterTotal.toFixed(1)}×`} />
-                          </div>
-                        </div>
-                      </div>
+                      {(() => {
+                        const grantDate    = new Date(a.grantDate)
+                        const vestingEnd   = new Date(grantDate)
+                        vestingEnd.setFullYear(vestingEnd.getFullYear() + a.popPlan.vestingYears)
+                        const now          = new Date()
+                        const isVested     = now >= vestingEnd
+                        const daysToVest   = Math.ceil((vestingEnd.getTime() - now.getTime()) / 86400000)
+                        return (
+                          <>
+                            {/* Status řádek */}
+                            <div className="flex flex-wrap gap-2 mb-4">
+                              {isVested ? (
+                                <span className="text-xs font-black bg-brand-green/20 text-brand-green border border-brand-green/30 px-3 py-1 rounded-full uppercase tracking-widest">
+                                  Nárok vestingován
+                                </span>
+                              ) : (
+                                <span className="text-xs font-black bg-white/10 text-white/50 border border-white/15 px-3 py-1 rounded-full uppercase tracking-widest">
+                                  Projekce · nárok za {daysToVest} dní ({vestingEnd.toLocaleDateString("cs-CZ")})
+                                </span>
+                              )}
+                              {a.popPlan.minGrowthPercent > 0 && (
+                                <span className={`text-xs font-black px-3 py-1 rounded-full uppercase tracking-widest border ${
+                                  pop.hurdleMet
+                                    ? "bg-brand-green/20 text-brand-green border-brand-green/30"
+                                    : "bg-brand-pink/20 text-brand-pink border-brand-pink/30"
+                                }`}>
+                                  {pop.hurdleMet ? "✓" : "✗"} Min. růst {a.popPlan.minGrowthPercent}% · aktuálně {Math.round(pop.growthPercent)}%
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex flex-col md:flex-row justify-between items-start gap-6 mb-6">
+                              <div>
+                                <p className="text-xs font-black text-white/40 uppercase tracking-[0.3em] mb-2">{a.popPlan.name} · {a.sharePercent}% podíl · grant {grantDate.getFullYear()}</p>
+                                <p className={`text-4xl font-black ${pop.hurdleMet ? "text-white" : "text-white/30"}`}>{fmt(pop.grossGain)}</p>
+                                {!pop.hurdleMet && (
+                                  <p className="text-xs text-brand-pink mt-1">Hurdle nesplněn — nárok je 0</p>
+                                )}
+                              </div>
+                              <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-2 min-w-[220px]">
+                                <PopRow label="Hodnota firmy dnes" value={fmt(pop.currentFirmValue)} />
+                                <PopRow label="Hodnota při grantu"  value={fmt(pop.grantFirmValue)} />
+                                <PopRow label="Vytvořená hodnota"   value={fmt(pop.createdValue)} accent />
+                                <div className="pt-2 border-t border-white/10">
+                                  <PopRow label="Koeficient"        value={`${pop.currentMultiplier.toFixed(1)}×`} />
+                                  <PopRow label="z toho boostery"   value={`+${pop.boosterTotal.toFixed(1)}×`} />
+                                  <PopRow label="Růst hodnoty"      value={`${Math.round(pop.growthPercent)}%`} />
+                                </div>
+                              </div>
+                            </div>
+                          </>
+                        )
+                      })()}
 
                       {/* Boostery */}
                       {a.popPlan.boosters.length > 0 && (
@@ -512,7 +552,7 @@ export default async function Home({
 
                       {/* Vesting splátky */}
                       {schedule.length > 0 && (
-                        <div>
+                        <div className="mt-2">
                           <p className="text-xs font-black text-white/30 uppercase tracking-widest mb-3">Vesting splátky</p>
                           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                             {schedule.map(v => {
