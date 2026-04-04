@@ -75,8 +75,17 @@ export default async function Home({
     ? await Promise.all([
         prisma.compensation.findUnique({ where: { userId_periodId: { userId: dbUser.id, periodId: period.id } } }),
         prisma.kpiTask.findMany({ where: { userId: dbUser.id, periodId: period.id }, orderBy: { name: "asc" } }),
-        prisma.performanceParameter.findMany({
-          where:   { periodId: period.id },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (prisma as any).performanceParameter.findMany({
+          where: {
+            periodId: period.id,
+            OR: [
+              { divisionId: null },
+              ...((dbUser as unknown as { divisionId: string | null }).divisionId
+                ? [{ divisionId: (dbUser as unknown as { divisionId: string }).divisionId }]
+                : []),
+            ],
+          },
           include: { results: { orderBy: [{ year: "asc" }, { quarter: "asc" }] } },
           orderBy: { sortOrder: "asc" },
         }),
@@ -90,18 +99,21 @@ export default async function Home({
       ])
     : [null, [], [], null, [], []]
 
+  type PerfParamFull = { id: string; name: string; weight: number; threshold: number; sortOrder: number; gatesParamId: string | null; results: { year: number; quarter: number; actual: number; target: number }[] }
+  const perfParamsTyped = perfParams as unknown as PerfParamFull[]
+
   const { quarter: nowQ, year: nowY } = currentQuarter()
   const curQ = q ? parseInt(q) : nowQ
   const curY = y ? parseInt(y) : nowY
 
   // Dostupné roky z výsledků
-  const availableYears: number[] = Array.from(new Set(perfParams.flatMap(p => p.results.map(r => r.year as number)))).sort()
+  const availableYears: number[] = Array.from(new Set(perfParamsTyped.flatMap((p: PerfParamFull) => p.results.map((r: PerfParamFull["results"][number]) => r.year)))).sort()
   if (!availableYears.includes(nowY)) availableYears.push(nowY)
 
   // ── VÝPOČTY ───────────────────────────────────────────────────────────────
 
   // Bonus z výkonnostních parametrů
-  const paramInputs = perfParams.map(p => {
+  const paramInputs = perfParamsTyped.map((p: PerfParamFull) => {
     const res = p.results.find(r => r.quarter === curQ && r.year === curY)
     return {
       id:           p.id,

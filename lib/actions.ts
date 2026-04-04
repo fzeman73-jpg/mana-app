@@ -196,9 +196,11 @@ export async function deletePeriod(periodId: string) {
 // ─── VÝKONNOSTNÍ PARAMETRY ───────────────────────────────────────────────────
 
 export async function createPerformanceParameter(periodId: string, formData: FormData) {
-  const caller = await requireAdminOrManager()
+  const caller     = await requireAdminOrManager()
+  const divisionId = (formData.get("divisionId") as string) || null
   const data = {
     periodId,
+    divisionId,
     name:         formData.get("name") as string,
     description:  (formData.get("description") as string) || undefined,
     weight:       parseFloat(formData.get("weight") as string)    || 0,
@@ -434,8 +436,13 @@ export async function closeQuarter(periodId: string, quarter: number, year: numb
       where: { userId: comp.userId, periodId },
     })
 
-    // Výpočet bonusu
-    const paramInputs = perfParams.map(p => {
+    // Výpočet bonusu — filtr parametrů dle divize uživatele
+    const userDivId = comp.user.divisionId
+    const userParams = perfParams.filter((p: typeof perfParams[number]) => {
+      const pd = (p as unknown as { divisionId: string | null }).divisionId
+      return pd === null || pd === userDivId
+    })
+    const paramInputs = userParams.map(p => {
       const res = p.results[0]
       return {
         id: p.id, name: p.name, weight: p.weight,

@@ -29,9 +29,10 @@ export default async function ParametersPage({
 
   const { periodId, userId, tab = "firma", year } = await searchParams
 
-  const [periods, users] = await Promise.all([
+  const [periods, users, divisions] = await Promise.all([
     prisma.period.findMany({ orderBy: { startDate: "desc" } }),
     prisma.user.findMany({ where: { isAllowed: true }, include: { division: true }, orderBy: { name: "asc" } }),
+    (prisma as unknown as { division: { findMany: (a: object) => Promise<{ id: string; name: string }[]> } }).division.findMany({ orderBy: { name: "asc" } }),
   ])
 
   const sel  = periods.find(p => p.id === periodId) ?? null
@@ -65,6 +66,15 @@ export default async function ParametersPage({
     new Set(perfParams.flatMap(p => p.results.map(r => r.year as number)))
   ).sort()
   if (!availableYears.includes(nowY)) availableYears.push(nowY)
+
+  type PerfParamRow = {
+    id: string; name: string; description: string | null; weight: number; threshold: number
+    sortOrder: number; gatesParamId: string | null; divisionId: string | null
+    results: { id: string; quarter: number; year: number; actual: number; target: number; note: string | null; isLocked: boolean; lockedAt: Date | null; lockedByEmail: string | null }[]
+  }
+  const allParams = perfParams as unknown as PerfParamRow[]
+  const companyParams   = allParams.filter(p => !p.divisionId)
+  const divisionParamsFor = (divId: string) => allParams.filter(p => p.divisionId === divId)
 
   const href = (params: Record<string, string | undefined>) => {
     const base: Record<string, string> = {}
@@ -174,10 +184,11 @@ export default async function ParametersPage({
 
             {/* Výkonnostní parametry */}
             <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-              <div className="flex items-start justify-between mb-5 gap-4 flex-wrap">
+              {/* Hlavička + rok */}
+              <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
                 <div>
                   <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-1">Výkonnostní parametry</h2>
-                  <p className="text-[11px] text-gray-400">Celková váha by měla být 100&nbsp;%. Bariéra = min. % plnění, pod ním je složka nulová.</p>
+                  <p className="text-[11px] text-gray-400">Firemní parametry platí všem. Divize dostávají navíc své vlastní. Celková váha = 100 %.</p>
                 </div>
                 {availableYears.length > 0 && (
                   <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -192,176 +203,192 @@ export default async function ParametersPage({
                 )}
               </div>
 
-              {perfParams.length > 0 && (
-                <div className="space-y-3 mb-6">
-                  {perfParams.map(p => {
-                    const res = p.results.find(r => r.quarter === curQ && r.year === curY)
-                    const ach = res && res.target > 0 ? Math.min(1.5, res.actual / res.target) : null
-                    const thresholdMet = ach !== null ? ach >= p.threshold / 100 : null
-                    return (
-                      <div key={p.id} className="border border-gray-200 rounded-2xl overflow-hidden">
-                        {/* Hlavička parametru */}
-                        <div className="flex items-start justify-between px-5 py-4 bg-gray-50">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 flex-wrap">
-                              <span className="font-black text-gray-900 text-sm">{p.name}</span>
-                              <span className="text-[9px] font-black bg-brand-cyan/10 text-brand-cyan px-2 py-0.5 rounded-full">váha {p.weight}%</span>
-                              <span className="text-[9px] font-black bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">bariéra {p.threshold}%</span>
-                              {p.gatesParamId && (
-                                <span className="text-[9px] font-black bg-brand-pink/10 text-brand-pink px-2 py-0.5 rounded-full">
-                                  gates → {perfParams.find(x => x.id === p.gatesParamId)?.name ?? "?"}
-                                </span>
-                              )}
-                            </div>
-                            {p.description && <p className="text-[10px] text-gray-400 mt-1">{p.description}</p>}
-                          </div>
-                          <div className="flex items-center gap-2 ml-3">
-                            {thresholdMet !== null && (
-                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${thresholdMet ? "bg-brand-green/10 text-brand-green" : "bg-brand-pink/10 text-brand-pink"}`}>
-                                {ach !== null ? `${Math.round(ach * 100)}%` : "—"} {thresholdMet ? "✓" : "✗ bariéra"}
-                              </span>
-                            )}
-                            <form action={deletePerformanceParameter.bind(null, p.id)}>
-                              <button className="text-gray-300 hover:text-brand-pink transition-colors p-1">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                              </button>
-                            </form>
-                          </div>
+              {(() => {
+                const renderParamCard = (p: PerfParamRow) => (
+                  <div key={p.id} className="border border-gray-200 rounded-2xl overflow-hidden">
+                    <div className="flex items-start justify-between px-5 py-4 bg-gray-50">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <span className="font-black text-gray-900 text-sm">{p.name}</span>
+                          <span className="text-[9px] font-black bg-brand-cyan/10 text-brand-cyan px-2 py-0.5 rounded-full">váha {p.weight}%</span>
+                          <span className="text-[9px] font-black bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">bariéra {p.threshold}%</span>
+                          {p.gatesParamId && (
+                            <span className="text-[9px] font-black bg-brand-pink/10 text-brand-pink px-2 py-0.5 rounded-full">
+                              gates → {allParams.find(x => x.id === p.gatesParamId)?.name ?? "?"}
+                            </span>
+                          )}
                         </div>
-
-                        {/* Kvartální výsledky */}
-                        <div className="px-5 py-4">
-                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">Kvartální výsledky {curY}</p>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            {[1, 2, 3, 4].map(q => {
-                              const r = p.results.find(r => r.quarter === q && r.year === curY)
-                              const qAch = r && r.target > 0 ? Math.min(1.5, r.actual / r.target) : null
-                              return (
-                                <form key={q} action={upsertQuarterlyResult.bind(null, p.id, q, curY)}>
-                                  <div className={`rounded-xl border p-3 ${r?.isLocked ? "bg-gray-50 border-gray-200" : "border-gray-200 hover:border-brand-cyan/40"}`}>
-                                    <div className="flex items-center justify-between mb-2">
-                                      <span className="text-[9px] font-black text-gray-500 uppercase">Q{q}</span>
-                                      {qAch !== null && (
-                                        <span className={`text-[9px] font-black ${qAch >= p.threshold / 100 ? "text-brand-green" : "text-brand-pink"}`}>
-                                          {Math.round(qAch * 100)}%
-                                        </span>
+                        {p.description && <p className="text-[10px] text-gray-400 mt-1">{p.description}</p>}
+                      </div>
+                      <div className="flex items-center gap-2 ml-3">
+                        {(() => {
+                          const res = p.results.find(r => r.quarter === curQ && r.year === curY)
+                          const ach = res && res.target > 0 ? Math.min(1.5, res.actual / res.target) : null
+                          const met = ach !== null ? ach >= p.threshold / 100 : null
+                          return met !== null ? (
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${met ? "bg-brand-green/10 text-brand-green" : "bg-brand-pink/10 text-brand-pink"}`}>
+                              {ach !== null ? `${Math.round(ach * 100)}%` : "—"} {met ? "✓" : "✗ bariéra"}
+                            </span>
+                          ) : null
+                        })()}
+                        <form action={deletePerformanceParameter.bind(null, p.id)}>
+                          <button className="text-gray-300 hover:text-brand-pink transition-colors p-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                    <div className="px-5 py-4">
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">Kvartální výsledky {curY}</p>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {[1, 2, 3, 4].map(q => {
+                          const r = p.results.find(r => r.quarter === q && r.year === curY)
+                          const qAch = r && r.target > 0 ? Math.min(1.5, r.actual / r.target) : null
+                          return (
+                            <form key={q} action={upsertQuarterlyResult.bind(null, p.id, q, curY)}>
+                              <div className={`rounded-xl border p-3 ${r?.isLocked ? "bg-gray-50 border-gray-200" : "border-gray-200 hover:border-brand-cyan/40"}`}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-[9px] font-black text-gray-500 uppercase">Q{q}</span>
+                                  {qAch !== null && (
+                                    <span className={`text-[9px] font-black ${qAch >= p.threshold / 100 ? "text-brand-green" : "text-brand-pink"}`}>
+                                      {Math.round(qAch * 100)}%
+                                    </span>
+                                  )}
+                                </div>
+                                {r?.isLocked ? (
+                                  <div className="text-[10px] text-gray-400">
+                                    <p>Skutečnost: <span className="font-black text-gray-700">{fmt(r.actual)}</span></p>
+                                    <p>Cíl: {fmt(r.target)}</p>
+                                    <div className="flex items-center justify-between mt-1">
+                                      <p className="text-[9px] text-brand-green">🔒 Uzavřeno</p>
+                                      {isAdmin && (
+                                        <form action={unlockQuarter.bind(null, p.id, q, curY)}>
+                                          <button type="submit" className="text-[8px] font-black text-gray-400 hover:text-brand-pink transition-colors uppercase tracking-wider">🔓 Odemknout</button>
+                                        </form>
                                       )}
                                     </div>
-                                    {r?.isLocked ? (
-                                      <div className="text-[10px] text-gray-400">
-                                        <p>Skutečnost: <span className="font-black text-gray-700">{fmt(r.actual)}</span></p>
-                                        <p>Cíl: {fmt(r.target)}</p>
-                                        <div className="flex items-center justify-between mt-1">
-                                          <p className="text-[9px] text-brand-green">🔒 Uzavřeno</p>
-                                          {isAdmin && (
-                                            <form action={unlockQuarter.bind(null, p.id, q, curY)}>
-                                              <button type="submit" className="text-[8px] font-black text-gray-400 hover:text-brand-pink transition-colors uppercase tracking-wider" title="Odemknout">
-                                                🔓 Odemknout
-                                              </button>
-                                            </form>
-                                          )}
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <div className="space-y-1.5">
-                                        <div>
-                                          <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Skutečnost</p>
-                                          <input name="actual" type="number" defaultValue={r?.actual ?? 0} step="any"
-                                            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-bold text-gray-900 outline-none focus:border-brand-cyan" />
-                                        </div>
-                                        <div>
-                                          <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Cíl</p>
-                                          <input name="target" type="number" defaultValue={r?.target ?? 0} step="any"
-                                            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-bold text-gray-900 outline-none focus:border-brand-cyan" />
-                                        </div>
-                                        <input name="note" placeholder="Poznámka" defaultValue={r?.note ?? ""}
-                                          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-[10px] text-gray-600 outline-none focus:border-brand-cyan" />
-                                        <div className="flex gap-1">
-                                          <button type="submit" className="flex-1 bg-brand-cyan text-brand-navy py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-brand-pink hover:text-white transition-all">
-                                            Uložit
-                                          </button>
-                                          {r && isAdmin && (
-                                            <form action={lockQuarter.bind(null, p.id, q, curY)}>
-                                              <button type="submit" className="bg-gray-100 text-gray-500 px-2 py-1.5 rounded-lg text-[9px] font-black hover:bg-brand-navy hover:text-white transition-all" title="Uzavřít kvartál">
-                                                🔒
-                                              </button>
-                                            </form>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
                                   </div>
-                                </form>
-                              )
-                            })}
-                          </div>
-                        </div>
+                                ) : (
+                                  <div className="space-y-1.5">
+                                    <div>
+                                      <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Skutečnost</p>
+                                      <input name="actual" type="number" defaultValue={r?.actual ?? 0} step="any"
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-bold text-gray-900 outline-none focus:border-brand-cyan" />
+                                    </div>
+                                    <div>
+                                      <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Cíl</p>
+                                      <input name="target" type="number" defaultValue={r?.target ?? 0} step="any"
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-bold text-gray-900 outline-none focus:border-brand-cyan" />
+                                    </div>
+                                    <input name="note" placeholder="Poznámka" defaultValue={r?.note ?? ""}
+                                      className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-[10px] text-gray-600 outline-none focus:border-brand-cyan" />
+                                    <div className="flex gap-1">
+                                      <button type="submit" className="flex-1 bg-brand-cyan text-brand-navy py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-brand-pink hover:text-white transition-all">Uložit</button>
+                                      {r && isAdmin && (
+                                        <form action={lockQuarter.bind(null, p.id, q, curY)}>
+                                          <button type="submit" className="bg-gray-100 text-gray-500 px-2 py-1.5 rounded-lg text-[9px] font-black hover:bg-brand-navy hover:text-white transition-all" title="Uzavřít kvartál">🔒</button>
+                                        </form>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </form>
+                          )
+                        })}
                       </div>
-                    )
-                  })}
-                  <p className={`text-[10px] text-right ${perfParams.reduce((s, p) => s + p.weight, 0) === 100 ? "text-brand-green font-black" : "text-brand-pink"}`}>
-                    Celková váha: {perfParams.reduce((s, p) => s + p.weight, 0)}% {perfParams.reduce((s, p) => s + p.weight, 0) !== 100 ? "(doporučeno 100%)" : "✓"}
-                  </p>
-                </div>
-              )}
+                    </div>
+                  </div>
+                )
 
-              {/* Přidat parametr */}
-              <details className="group">
-                <summary className="cursor-pointer text-[10px] font-black text-brand-cyan uppercase tracking-widest hover:underline list-none">+ Přidat parametr</summary>
-                <form action={createPerformanceParameter.bind(null, sel.id)} className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-200">
-                  <div className="sm:col-span-2">
-                    <Label>Název</Label>
-                    <input name="name" placeholder="např. EBITDA skupiny" required className={inputCls} />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Label>Popis metodiky (zobrazuje se uživateli)</Label>
-                    <textarea name="description" placeholder="Jak se parametr počítá, z čeho se skládá..." rows={2} className={inputCls + " resize-none"} />
-                  </div>
-                  <div>
-                    <Label>Váha (%)</Label>
-                    <input name="weight" type="number" step="0.1" min="0" max="100" placeholder="40" className={inputCls} />
-                  </div>
-                  <div>
-                    <Label>Bariéra – min. plnění (%)</Label>
-                    <input name="threshold" type="number" step="0.1" min="0" max="100" placeholder="80" className={inputCls} />
-                  </div>
-                  <div>
-                    <Label>Pořadí</Label>
-                    <input name="sortOrder" type="number" defaultValue={perfParams.length} className={inputCls} />
-                  </div>
-                  <div className="flex items-end">
-                    <button type="submit" className={btnCyan + " w-full"}>Přidat parametr</button>
-                  </div>
-                </form>
-              </details>
+                const addParamForm = (divisionId: string | null, count: number) => (
+                  <details className="group mt-3">
+                    <summary className="cursor-pointer text-[10px] font-black text-brand-cyan uppercase tracking-widest hover:underline list-none">+ Přidat parametr</summary>
+                    <form action={createPerformanceParameter.bind(null, sel.id)} className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-200">
+                      <input type="hidden" name="divisionId" value={divisionId ?? ""} />
+                      <div className="sm:col-span-2">
+                        <Label>Název</Label>
+                        <input name="name" placeholder="např. EBITDA skupiny" required className={inputCls} />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <Label>Popis metodiky</Label>
+                        <textarea name="description" rows={2} className={inputCls + " resize-none"} />
+                      </div>
+                      <div><Label>Váha (%)</Label><input name="weight" type="number" step="0.1" min="0" max="100" placeholder="40" className={inputCls} /></div>
+                      <div><Label>Bariéra (%)</Label><input name="threshold" type="number" step="0.1" min="0" max="100" placeholder="80" className={inputCls} /></div>
+                      <div><Label>Pořadí</Label><input name="sortOrder" type="number" defaultValue={count} className={inputCls} /></div>
+                      <div className="flex items-end"><button type="submit" className={btnCyan + " w-full"}>Přidat</button></div>
+                    </form>
+                  </details>
+                )
 
-              {/* Nastavení gating */}
-              {perfParams.length >= 2 && (
-                <details className="group mt-3">
-                  <summary className="cursor-pointer text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-brand-pink transition-colors list-none">⚡ Nastavit gating (podmíněné nulování)</summary>
-                  <div className="mt-4 space-y-2 p-4 bg-gray-50 rounded-2xl border border-gray-200">
-                    <p className="text-[10px] text-gray-400 mb-3">Pokud parametr A nesplní bariéru, parametr B se automaticky nuluje.</p>
-                    {perfParams.map(p => (
-                      <form key={p.id} action={updatePerformanceParameter.bind(null, p.id)} className="flex items-center gap-3">
-                        <span className="text-sm font-black text-gray-700 w-40 truncate">{p.name}</span>
-                        <span className="text-[10px] text-gray-400">nuluje →</span>
-                        <select name="gatesParamId" defaultValue={p.gatesParamId ?? ""}
-                          className="flex-1 bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 outline-none focus:border-brand-cyan">
-                          <option value="">— žádný —</option>
-                          {perfParams.filter(x => x.id !== p.id).map(x => (
-                            <option key={x.id} value={x.id}>{x.name}</option>
-                          ))}
-                        </select>
-                        <input type="hidden" name="name"        value={p.name} />
-                        <input type="hidden" name="description" value={p.description ?? ""} />
-                        <input type="hidden" name="weight"      value={p.weight} />
-                        <input type="hidden" name="threshold"   value={p.threshold} />
-                        <button type="submit" className="text-[9px] font-black text-brand-cyan hover:underline uppercase tracking-wider">Uložit</button>
-                      </form>
-                    ))}
+                const weightBadge = (params: PerfParamRow[]) => {
+                  const total = params.reduce((s, p) => s + p.weight, 0)
+                  return <p className={`text-[10px] text-right mt-2 font-black ${total === 100 ? "text-brand-green" : "text-brand-pink"}`}>Váha: {total}% {total !== 100 ? "(doporučeno 100%)" : "✓"}</p>
+                }
+
+                return (
+                  <div className="space-y-6">
+                    {/* FIREMNÍ — platí všem */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Firemní</span>
+                        <span className="text-[9px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">platí všem manažerům</span>
+                      </div>
+                      <div className="space-y-3">{companyParams.map(renderParamCard)}</div>
+                      {companyParams.length > 0 && weightBadge(companyParams)}
+                      {addParamForm(null, companyParams.length)}
+                    </div>
+
+                    {/* PER DIVIZE */}
+                    {divisions.map(div => {
+                      const dps = divisionParamsFor(div.id)
+                      return (
+                        <div key={div.id} className="border-t border-gray-100 pt-5">
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-[10px] font-black text-brand-pink uppercase tracking-widest">{div.name}</span>
+                            <span className="text-[9px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">pouze tato divize</span>
+                          </div>
+                          <div className="space-y-3">{dps.map(renderParamCard)}</div>
+                          {dps.length === 0 && <p className="text-[11px] text-gray-300 italic py-2">Žádné divize parametry.</p>}
+                          {dps.length > 0 && weightBadge(dps)}
+                          {addParamForm(div.id, dps.length)}
+                        </div>
+                      )
+                    })}
+
+                    {/* GATING */}
+                    {allParams.length >= 2 && (
+                      <div className="border-t border-gray-100 pt-4">
+                        <details className="group">
+                          <summary className="cursor-pointer text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-brand-pink transition-colors list-none">⚡ Nastavit gating (podmíněné nulování)</summary>
+                          <div className="mt-4 space-y-2 p-4 bg-gray-50 rounded-2xl border border-gray-200">
+                            <p className="text-[10px] text-gray-400 mb-3">Pokud parametr A nesplní bariéru, parametr B se automaticky nuluje.</p>
+                            {allParams.map(p => (
+                              <form key={p.id} action={updatePerformanceParameter.bind(null, p.id)} className="flex items-center gap-3">
+                                <span className="text-sm font-black text-gray-700 w-40 truncate">{p.name}</span>
+                                <span className="text-[10px] text-gray-400">nuluje →</span>
+                                <select name="gatesParamId" defaultValue={p.gatesParamId ?? ""}
+                                  className="flex-1 bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 outline-none focus:border-brand-cyan">
+                                  <option value="">— žádný —</option>
+                                  {allParams.filter(x => x.id !== p.id).map(x => (
+                                    <option key={x.id} value={x.id}>{x.name}</option>
+                                  ))}
+                                </select>
+                                <input type="hidden" name="name"        value={p.name} />
+                                <input type="hidden" name="description" value={p.description ?? ""} />
+                                <input type="hidden" name="weight"      value={p.weight} />
+                                <input type="hidden" name="threshold"   value={p.threshold} />
+                                <button type="submit" className="text-[9px] font-black text-brand-cyan hover:underline uppercase tracking-wider">Uložit</button>
+                              </form>
+                            ))}
+                          </div>
+                        </details>
+                      </div>
+                    )}
                   </div>
-                </details>
-              )}
+                )
+              })()}
             </section>
 
             {/* POP – Valuační základ */}

@@ -42,18 +42,24 @@ export async function GET(req: NextRequest) {
 
   for (const comp of compensations) {
     const kpiTasks = await prisma.kpiTask.findMany({ where: { userId: comp.userId, periodId } })
-    const params = perfParams.map(p => {
-      const res = p.results.find(r => r.quarter === curQ && r.year === curY)
-      return {
-        id:           p.id,
-        name:         p.name,
-        weight:       p.weight,
-        threshold:    p.threshold,
-        gatesParamId: p.gatesParamId,
-        actual:       res?.actual ?? 0,
-        target:       res?.target ?? 0,
-      }
-    })
+    const userDivId = comp.user.divisionId
+    const params = perfParams
+      .filter(p =>
+        (p as unknown as { divisionId: string | null }).divisionId === null ||
+        (p as unknown as { divisionId: string | null }).divisionId === userDivId
+      )
+      .map(p => {
+        const res = p.results.find(r => r.quarter === curQ && r.year === curY)
+        return {
+          id:           p.id,
+          name:         p.name,
+          weight:       p.weight,
+          threshold:    p.threshold,
+          gatesParamId: p.gatesParamId,
+          actual:       res?.actual ?? 0,
+          target:       res?.target ?? 0,
+        }
+      })
     const bonus = calcBonus(params, comp.targetBonusAnnual, kpiTasks.map(t => {
       const tt = t as unknown as { taskType: string; completionPct: number | null; targetAmount: number | null; actualAmount: number | null }
       let p = t.isCompleted ? 1 : 0

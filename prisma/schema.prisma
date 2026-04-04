@@ -77,6 +77,7 @@ model Division {
   name        String
   description String?
   users       User[]
+  parameters  PerformanceParameter[]
 }
 
 // ─── ČASOVÉ OBDOBÍ ───────────────────────────────────────────────────────────
@@ -102,6 +103,7 @@ model Period {
 model PerformanceParameter {
   id          String  @id @default(cuid())
   periodId    String
+  divisionId  String?           // null = firemní (platí všem), set = jen pro tuto divizi
   name        String            // "EBITDA skupiny", "HORIZONT – Divize A"
   description String?           // textový popis metodiky výpočtu
   weight      Float             // váha v % z cílového bonusu (součet všech = 100)
@@ -113,6 +115,7 @@ model PerformanceParameter {
   gatesParamId String?           // ID parametru který se nuluje při neúspěchu tohoto
 
   period     Period             @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  division   Division?          @relation(fields: [divisionId], references: [id], onDelete: SetNull)
   results    QuarterlyResult[]
 }
 

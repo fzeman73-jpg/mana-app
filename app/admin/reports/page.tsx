@@ -50,7 +50,12 @@ export default async function ReportsPage({
     compensations.map(async comp => {
       const kpiTasks = await prisma.kpiTask.findMany({ where: { userId: comp.userId, periodId: sel!.id } })
 
-      const params = perfParams.map(p => {
+      const userDivId = comp.user.divisionId
+      const userPerfParams = perfParams.filter(p =>
+        (p as unknown as { divisionId: string | null }).divisionId === null ||
+        (p as unknown as { divisionId: string | null }).divisionId === userDivId
+      )
+      const params = userPerfParams.map(p => {
         const res = p.results.find(r => r.quarter === curQ && r.year === curY)
         return {
           id:           p.id,
