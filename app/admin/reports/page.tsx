@@ -51,6 +51,10 @@ export default async function ReportsPage({
       const kpiTasks = await prisma.kpiTask.findMany({ where: { userId: comp.userId, periodId: sel!.id } })
 
       const userDivId = comp.user.divisionId
+      const weightRows = await (prisma as unknown as {
+        parameterWeight: { findMany: (a: object) => Promise<{ parameterId: string; weight: number }[]> }
+      }).parameterWeight.findMany({ where: { userId: comp.userId } })
+      const weightMap = new Map(weightRows.map((r: { parameterId: string; weight: number }) => [r.parameterId, r.weight]))
       const userPerfParams = perfParams.filter(p =>
         (p as unknown as { divisionId: string | null }).divisionId === null ||
         (p as unknown as { divisionId: string | null }).divisionId === userDivId
@@ -60,7 +64,7 @@ export default async function ReportsPage({
         return {
           id:           p.id,
           name:         p.name,
-          weight:       p.weight,
+          weight:       weightMap.get(p.id) ?? p.weight,
           threshold:    p.threshold,
           gatesParamId: p.gatesParamId,
           actual:       res?.actual ?? 0,

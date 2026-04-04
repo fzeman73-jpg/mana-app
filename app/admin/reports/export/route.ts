@@ -42,7 +42,11 @@ export async function GET(req: NextRequest) {
 
   for (const comp of compensations) {
     const kpiTasks = await prisma.kpiTask.findMany({ where: { userId: comp.userId, periodId } })
-    const userDivId = comp.user.divisionId
+    const userDivId  = comp.user.divisionId
+    const weightRows = await (prisma as unknown as {
+      parameterWeight: { findMany: (a: object) => Promise<{ parameterId: string; weight: number }[]> }
+    }).parameterWeight.findMany({ where: { userId: comp.userId } })
+    const weightMap  = new Map(weightRows.map((r: { parameterId: string; weight: number }) => [r.parameterId, r.weight]))
     const params = perfParams
       .filter(p =>
         (p as unknown as { divisionId: string | null }).divisionId === null ||
@@ -53,7 +57,7 @@ export async function GET(req: NextRequest) {
         return {
           id:           p.id,
           name:         p.name,
-          weight:       p.weight,
+          weight:       weightMap.get(p.id) ?? p.weight,
           threshold:    p.threshold,
           gatesParamId: p.gatesParamId,
           actual:       res?.actual ?? 0,

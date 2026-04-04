@@ -6,6 +6,7 @@ import {
   upsertQuarterlyResult, lockQuarter, unlockQuarter,
   upsertVestingBase, createBooster, toggleBooster, deleteBooster,
   adminSetCompensation, adminAddKpiTask, adminDeleteKpiTask, adminToggleKpiTask, updateKpiTaskCompletion,
+  setParameterWeight, resetParameterWeight,
   closeQuarter,
 } from "@/lib/actions"
 import Image from "next/image"
@@ -50,11 +51,15 @@ export default async function ParametersPage({
   ]) : [[], null, []]
 
   // Data pro vybraného uživatele + období
-  const [compensation, kpiTasks, allCompensations] = (sel && selU) ? await Promise.all([
+  const [compensation, kpiTasks, allCompensations, weightOverrides] = (sel && selU) ? await Promise.all([
     prisma.compensation.findUnique({ where: { userId_periodId: { userId: selU.id, periodId: sel.id } } }),
     prisma.kpiTask.findMany({ where: { userId: selU.id, periodId: sel.id }, orderBy: { name: "asc" } }),
     prisma.compensation.findMany({ where: { periodId: sel.id }, select: { userId: true } }),
-  ]) : [null, [], sel ? await prisma.compensation.findMany({ where: { periodId: sel.id }, select: { userId: true } }) : []]
+    (prisma as unknown as { parameterWeight: { findMany: (a: object) => Promise<{ parameterId: string; weight: number }[]> } })
+      .parameterWeight.findMany({ where: { userId: selU.id } }),
+  ]) : [null, [], sel ? await prisma.compensation.findMany({ where: { periodId: sel.id }, select: { userId: true } }) : [], []]
+
+  const weightMap = new Map((weightOverrides as { parameterId: string; weight: number }[]).map(r => [r.parameterId, r.weight]))
 
   const now   = new Date()
   const curQ  = Math.ceil((now.getMonth() + 1) / 3)
@@ -607,6 +612,73 @@ export default async function ParametersPage({
                       <button type="submit" className={btnCyan + " w-full"}>Uložit smluvní podmínky</button>
                     </form>
                   </section>
+
+                  {/* VÝKONNOSTNÍ PARAMETRY — přepsání vah */}
+                  {sel && (() => {
+                    const selUDivId = (selU as unknown as { divisionId: string | null }).divisionId
+                    const managerParams = allParams.filter(p => !p.divisionId || p.divisionId === selUDivId)
+                    if (managerParams.length === 0) return null
+                    const totalOverride = managerParams.reduce((s, p) => s + (weightMap.get(p.id) ?? p.weight), 0)
+                    const hasAnyOverride = managerParams.some(p => weightMap.has(p.id))
+                    return (
+                      <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <h3 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic">Výkonnostní parametry</h3>
+                            <p className="text-[11px] text-gray-400 mt-0.5">Přepište váhu pro tohoto manažera. Prázdné = výchozí globální hodnota.</p>
+                          </div>
+                          <span className={`text-[9px] font-black px-3 py-1 rounded-full flex-shrink-0 ${Math.abs(totalOverride - 100) < 0.1 ? "bg-brand-green/10 text-brand-green" : "bg-brand-pink/10 text-brand-pink"}`}>
+                            Celkem: {totalOverride.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          {managerParams.map(p => {
+                            const globalW   = p.weight
+                            const overrideW = weightMap.get(p.id)
+                            const effective = overrideW ?? globalW
+                            const isDiv     = !!p.divisionId
+                            return (
+                              <div key={p.id} className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${overrideW !== undefined ? "bg-brand-cyan/5 border-brand-cyan/20" : "bg-gray-50 border-gray-200"}`}>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-black text-sm text-gray-900 truncate">{p.name}</span>
+                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${isDiv ? "bg-brand-pink/10 text-brand-pink" : "bg-gray-100 text-gray-400"}`}>
+                                      {isDiv ? "divize" : "firemní"}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] text-gray-400">
+                                    Globální: {globalW}%
+                                    {overrideW !== undefined && <span className="text-brand-cyan font-black"> → přepsáno na {overrideW}%</span>}
+                                  </span>
+                                </div>
+                                <form action={setParameterWeight.bind(null, selU.id, p.id)} className="flex items-center gap-2">
+                                  <input name="weight" type="number" step="0.1" min="0" max="100"
+                                    defaultValue={effective}
+                                    className="w-20 bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold text-gray-900 outline-none focus:border-brand-cyan text-center" />
+                                  <span className="text-[10px] text-gray-400">%</span>
+                                  <button type="submit" className="text-[9px] font-black px-3 py-1.5 rounded-xl bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan hover:text-brand-navy transition-all border border-brand-cyan/20">
+                                    Uložit
+                                  </button>
+                                </form>
+                                {overrideW !== undefined && (
+                                  <form action={resetParameterWeight.bind(null, selU.id, p.id)}>
+                                    <button type="submit" className="text-[9px] font-black text-gray-300 hover:text-brand-pink transition-colors px-2 py-1.5" title="Obnovit globální váhu">
+                                      ↺
+                                    </button>
+                                  </form>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                        {hasAnyOverride && Math.abs(totalOverride - 100) > 0.1 && (
+                          <p className="text-[10px] text-brand-pink font-black mt-3 text-right">
+                            Váhy nesumují na 100 % — bonus bude vypočten s neúplnou škálou
+                          </p>
+                        )}
+                      </section>
+                    )
+                  })()}
 
                   {/* KPI ÚKOLY */}
                   <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">

@@ -26,13 +26,14 @@ model User {
   password      String?
   divisionId    String?
 
-  accounts      Account[]
-  sessions      Session[]
-  compensations Compensation[]
-  kpiTasks      KpiTask[]
-  snapshots     QuarterlySnapshot[]
-  auditLogs     AuditLog[]
-  division      Division? @relation(fields: [divisionId], references: [id], onDelete: SetNull)
+  accounts         Account[]
+  sessions         Session[]
+  compensations    Compensation[]
+  kpiTasks         KpiTask[]
+  snapshots        QuarterlySnapshot[]
+  auditLogs        AuditLog[]
+  parameterWeights ParameterWeight[]
+  division         Division? @relation(fields: [divisionId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -114,9 +115,10 @@ model PerformanceParameter {
   // Příklad: EBITDA nesplní → HORIZONT se nuluje
   gatesParamId String?           // ID parametru který se nuluje při neúspěchu tohoto
 
-  period     Period             @relation(fields: [periodId], references: [id], onDelete: Cascade)
-  division   Division?          @relation(fields: [divisionId], references: [id], onDelete: SetNull)
-  results    QuarterlyResult[]
+  period           Period             @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  division         Division?          @relation(fields: [divisionId], references: [id], onDelete: SetNull)
+  results          QuarterlyResult[]
+  weightOverrides  ParameterWeight[]
 }
 
 // Kvartální výsledky na parametr
@@ -206,6 +208,20 @@ model VestingPayment {
 
   compensation Compensation @relation(fields: [compensationId], references: [id], onDelete: Cascade)
   @@unique([compensationId, vestingYear])
+}
+
+// ─── PER-MANAŽER PŘEPSÁNÍ VÁHY PARAMETRU ────────────────────────────────────
+
+model ParameterWeight {
+  id          String @id @default(cuid())
+  userId      String
+  parameterId String
+  weight      Float  // přepsání globální váhy pro tohoto manažera
+
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parameter PerformanceParameter @relation(fields: [parameterId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, parameterId])
 }
 
 // ─── KPI ÚKOLY (individuální) ────────────────────────────────────────────────

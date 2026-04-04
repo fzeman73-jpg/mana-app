@@ -9,6 +9,14 @@ import { calcBonus, calcPOP } from "@/lib/calculator"
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
+/** Načte mapu parameterId → přepsaná váha pro daného uživatele */
+async function loadWeightOverrides(userId: string): Promise<Map<string, number>> {
+  const rows = await (prisma as unknown as {
+    parameterWeight: { findMany: (a: object) => Promise<{ parameterId: string; weight: number }[]> }
+  }).parameterWeight.findMany({ where: { userId } })
+  return new Map(rows.map(r => [r.parameterId, r.weight]))
+}
+
 async function getCallerOrThrow() {
   const session = await auth()
   const email = session?.user?.email
@@ -355,6 +363,32 @@ export async function adminSetCompensation(userId: string, periodId: string, for
   revalidatePath("/")
 }
 
+// ─── PŘEPSÁNÍ VÁHY PARAMETRU PER MANAŽER ─────────────────────────────────────
+
+export async function setParameterWeight(userId: string, parameterId: string, formData: FormData) {
+  const caller = await requireAdmin()
+  const weight = parseFloat(formData.get("weight") as string)
+  if (isNaN(weight) || weight < 0) throw new Error("Neplatná váha")
+  await (prisma as unknown as { parameterWeight: { upsert: (a: object) => Promise<unknown> } }).parameterWeight.upsert({
+    where:  { userId_parameterId: { userId, parameterId } },
+    create: { userId, parameterId, weight },
+    update: { weight },
+  })
+  await audit(caller.email!, "SET_PARAMETER_WEIGHT", `User:${userId}`, undefined, { parameterId, weight })
+  revalidatePath("/admin/parameters")
+  revalidatePath("/")
+}
+
+export async function resetParameterWeight(userId: string, parameterId: string) {
+  const caller = await requireAdmin()
+  await (prisma as unknown as { parameterWeight: { deleteMany: (a: object) => Promise<unknown> } }).parameterWeight.deleteMany({
+    where: { userId, parameterId },
+  })
+  await audit(caller.email!, "RESET_PARAMETER_WEIGHT", `User:${userId}`, undefined, { parameterId })
+  revalidatePath("/admin/parameters")
+  revalidatePath("/")
+}
+
 // ─── KPI ÚKOLY ────────────────────────────────────────────────────────────────
 
 export async function adminAddKpiTask(userId: string, periodId: string, formData: FormData) {
@@ -436,17 +470,20 @@ export async function closeQuarter(periodId: string, quarter: number, year: numb
       where: { userId: comp.userId, periodId },
     })
 
-    // Výpočet bonusu — filtr parametrů dle divize uživatele
-    const userDivId = comp.user.divisionId
-    const userParams = perfParams.filter((p: typeof perfParams[number]) => {
+    // Výpočet bonusu — filtr parametrů dle divize + přepsání vah
+    const userDivId   = comp.user.divisionId
+    const weightMap   = await loadWeightOverrides(comp.userId)
+    const userParams  = perfParams.filter((p: typeof perfParams[number]) => {
       const pd = (p as unknown as { divisionId: string | null }).divisionId
       return pd === null || pd === userDivId
     })
     const paramInputs = userParams.map(p => {
       const res = p.results[0]
       return {
-        id: p.id, name: p.name, weight: p.weight,
-        threshold: p.threshold, gatesParamId: p.gatesParamId,
+        id: p.id, name: p.name,
+        weight:       weightMap.get(p.id) ?? p.weight,
+        threshold:    p.threshold,
+        gatesParamId: p.gatesParamId,
         actual: res?.actual ?? 0, target: res?.target ?? 0,
       }
     })

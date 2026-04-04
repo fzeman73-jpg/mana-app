@@ -112,13 +112,19 @@ export default async function Home({
 
   // ── VÝPOČTY ───────────────────────────────────────────────────────────────
 
+  // Přepsání vah parametrů per manažer
+  const weightOverrides = period ? await (prisma as unknown as {
+    parameterWeight: { findMany: (a: object) => Promise<{ parameterId: string; weight: number }[]> }
+  }).parameterWeight.findMany({ where: { userId: dbUser.id } }) : []
+  const weightMap = new Map(weightOverrides.map((r: { parameterId: string; weight: number }) => [r.parameterId, r.weight]))
+
   // Bonus z výkonnostních parametrů
   const paramInputs = perfParamsTyped.map((p: PerfParamFull) => {
     const res = p.results.find(r => r.quarter === curQ && r.year === curY)
     return {
       id:           p.id,
       name:         p.name,
-      weight:       p.weight,
+      weight:       weightMap.get(p.id) ?? p.weight,
       threshold:    p.threshold,
       gatesParamId: p.gatesParamId,
       actual:       res?.actual ?? 0,
