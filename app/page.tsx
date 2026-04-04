@@ -567,7 +567,10 @@ export default async function Home({
                       {/* Vesting splátky */}
                       {schedule.length > 0 && (
                         <div className="mt-2">
-                          <p className="text-xs font-black text-white/30 uppercase tracking-widest mb-3">Vesting splátky</p>
+                          <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
+                            <p className="text-xs font-black text-white/30 uppercase tracking-widest">Vesting splátky</p>
+                            <p className="text-[10px] text-white/25 italic">Orientační přehled — skutečná výše každé splátky bude stanovena podle aktuální hodnoty firmy v době výplaty</p>
+                          </div>
                           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                             {schedule.map(v => {
                               const paid = a.payments.find(p => p.vestingYear === v.index)
