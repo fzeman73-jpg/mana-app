@@ -35,6 +35,7 @@ model User {
   auditLogs        AuditLog[]
   parameterWeights ParameterWeight[]
   phantomGrants    PhantomGrant[]
+  popAssignments   PopAssignment[]
   division         Division? @relation(fields: [divisionId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
@@ -140,7 +141,73 @@ model QuarterlyResult {
   @@unique([parameterId, quarter, year])
 }
 
-// ─── POP – PHANTOM OPTION PLAN ───────────────────────────────────────────────
+// ─── POP PLAN (nová architektura) ─────────────────────────────────────────────
+
+model PopPlan {
+  id                 String   @id @default(cuid())
+  name               String
+  description        String?
+  baseMultiplier     Float    @default(6.0)
+  vestingYears       Int      @default(4)
+  vestingGranularity String   @default("YEARLY")  // YEARLY | QUARTERLY
+
+  boosters    PopPlanBooster[]
+  yearData    PopYearData[]
+  assignments PopAssignment[]
+}
+
+model PopPlanBooster {
+  id              String    @id @default(cuid())
+  popPlanId       String
+  name            String
+  description     String?
+  multiplierBoost Float
+  isAchieved      Boolean   @default(false)
+  achievedAt      DateTime?
+
+  popPlan PopPlan @relation(fields: [popPlanId], references: [id], onDelete: Cascade)
+}
+
+model PopYearData {
+  id            String @id @default(cuid())
+  popPlanId     String
+  year          Int
+  currentEbitda Float  @default(0)
+
+  popPlan PopPlan @relation(fields: [popPlanId], references: [id], onDelete: Cascade)
+
+  @@unique([popPlanId, year])
+}
+
+model PopAssignment {
+  id           String   @id @default(cuid())
+  userId       String
+  popPlanId    String
+  sharePercent Float    @default(0)
+  grantDate    DateTime @default(now())
+  grantEbitda  Float    @default(0)
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  popPlan  PopPlan       @relation(fields: [popPlanId], references: [id], onDelete: Cascade)
+  payments PopPayment[]
+
+  @@unique([userId, popPlanId])
+}
+
+model PopPayment {
+  id             String    @id @default(cuid())
+  assignmentId   String
+  vestingYear    Int
+  isPaid         Boolean   @default(false)
+  paidAt         DateTime?
+  amount         Float?
+
+  assignment PopAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, vestingYear])
+}
+
+// ─── POP – PHANTOM OPTION PLAN (legacy) ──────────────────────────────────────
 
 // Základní valuační data pro POP (globální, per období)
 model VestingBase {

@@ -1,0 +1,394 @@
+import { auth } from "@/auth"
+import { prisma } from "@/lib/db"
+import { redirect, notFound } from "next/navigation"
+import Image from "next/image"
+import {
+  updatePopPlan, deletePopPlan,
+  createPopBooster, togglePopBooster, deletePopBooster,
+  upsertPopYearData, deletePopYearData,
+  upsertPopAssignment, deletePopAssignment,
+  markPopPaymentPaid, markPopPaymentUnpaid,
+} from "@/lib/actions"
+import { calcPOP, calcVestingSchedule, yearsSinceDate } from "@/lib/calculator"
+
+const fmt = (n: number) => Intl.NumberFormat("cs-CZ").format(Math.round(n))
+
+type PopBooster    = { id: string; name: string; description: string | null; multiplierBoost: number; isAchieved: boolean }
+type PopYearData   = { id: string; year: number; currentEbitda: number }
+type PopPaymentRow = { id: string; vestingYear: number; isPaid: boolean; paidAt: Date | null; amount: number | null }
+type PopAssign     = {
+  id: string; userId: string; sharePercent: number; grantDate: Date; grantEbitda: number
+  payments: PopPaymentRow[]
+  user: { id: string; name: string | null; email: string | null; divisionId: string | null }
+}
+type PopPlanFull   = {
+  id: string; name: string; description: string | null
+  baseMultiplier: number; vestingYears: number; vestingGranularity: string
+  boosters:    PopBooster[]
+  yearData:    PopYearData[]
+  assignments: PopAssign[]
+}
+
+export default async function PopPlanDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const session = await auth()
+  const caller  = await prisma.user.findUnique({ where: { email: session?.user?.email || "" } })
+  if (caller?.role !== "ADMIN") redirect("/")
+
+  const { id } = await params
+
+  const pp = prisma as unknown as { popPlan: { findUnique: (a: object) => Promise<PopPlanFull | null> } }
+
+  const plan = await pp.popPlan.findUnique({
+    where:   { id },
+    include: {
+      boosters:    { orderBy: { name: "asc" } },
+      yearData:    { orderBy: { year: "asc" } },
+      assignments: {
+        include: {
+          user:     { select: { id: true, name: true, email: true, divisionId: true } },
+          payments: { orderBy: { vestingYear: "asc" } },
+        },
+        orderBy: { grantDate: "asc" },
+      },
+    },
+  })
+
+  if (!plan) notFound()
+
+  // Users not yet assigned for the add-assignment form
+  const allUsers = await prisma.user.findMany({
+    where:   { isAllowed: true, role: { in: ["ADMIN", "MANAGER"] } },
+    orderBy: { name: "asc" },
+    select:  { id: true, name: true, email: true },
+  })
+  const assignedUserIds = new Set(plan.assignments.map(a => a.userId))
+  const unassignedUsers = allUsers.filter(u => !assignedUserIds.has(u.id))
+
+  const curYear = new Date().getFullYear()
+
+  // Latest EBITDA for POP calculation
+  const latestYearData = plan.yearData.at(-1)
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-8 font-sans selection:bg-brand-cyan/20">
+      <div className="max-w-3xl mx-auto space-y-8">
+
+        {/* HLAVIČKA */}
+        <header className="flex flex-col md:flex-row justify-between items-center bg-white p-10 rounded-[3rem] shadow-sm border border-gray-100 gap-6">
+          <div className="flex items-center gap-6">
+            <a href="/"><Image src="/algotech-logo.png" alt="Algotech" width={160} height={46} className="object-contain" /></a>
+            <div className="w-px h-10 bg-gray-200 hidden md:block" />
+            <div>
+              <h1 className="text-xl font-black italic uppercase tracking-tighter text-gray-900">
+                <span className="text-brand-cyan">{plan.name}</span>
+              </h1>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">POP plán</p>
+            </div>
+          </div>
+          <a href="/admin/pop" className="bg-brand-cyan text-brand-navy px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-brand-pink hover:text-white transition-all shadow-sm">
+            ← POP plány
+          </a>
+        </header>
+
+        {/* NASTAVENÍ PLÁNU */}
+        <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+          <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-6">Nastavení plánu</h2>
+          <form action={updatePopPlan.bind(null, plan.id)} className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input
+                name="name" required defaultValue={plan.name}
+                className="bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+              />
+              <input
+                name="description" placeholder="Popis (volitelné)" defaultValue={plan.description ?? ""}
+                className="bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Základní multiplikátor</label>
+                <input
+                  name="baseMultiplier" type="number" step="0.1" defaultValue={plan.baseMultiplier} required
+                  className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Délka vestingu (roky)</label>
+                <input
+                  name="vestingYears" type="number" min="1" max="10" defaultValue={plan.vestingYears} required
+                  className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Granularita</label>
+                <select
+                  name="vestingGranularity" defaultValue={plan.vestingGranularity}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+                >
+                  <option value="YEARLY">Ročně</option>
+                  <option value="QUARTERLY">Čtvrtletně</option>
+                </select>
+              </div>
+            </div>
+            <button type="submit" className="bg-brand-cyan text-brand-navy px-6 py-3.5 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-pink hover:text-white transition-all shadow-sm active:scale-95">
+              Uložit
+            </button>
+          </form>
+        </section>
+
+        {/* ROČNÍ EBITDA */}
+        <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+          <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-6">Roční EBITDA</h2>
+          <p className="text-[10px] text-gray-400 mb-4 ml-1">Admin každý rok aktualizuje aktuální EBITDA pro výpočet hodnoty firmy v daném roce.</p>
+
+          {plan.yearData.length > 0 && (
+            <div className="space-y-2 mb-4">
+              {plan.yearData.map(yd => (
+                <div key={yd.id} className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3">
+                  <span className="font-black text-brand-cyan text-sm w-16">{yd.year}</span>
+                  <span className="flex-1 font-bold text-gray-900 text-sm">{fmt(yd.currentEbitda)} CZK</span>
+                  <form action={deletePopYearData.bind(null, yd.id, plan.id)}>
+                    <button type="submit" className="text-[9px] font-black text-gray-400 hover:text-brand-pink transition-colors uppercase tracking-widest px-2 py-1">
+                      Smazat
+                    </button>
+                  </form>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <form action={upsertPopYearData.bind(null, plan.id)} className="flex gap-3">
+            <input
+              name="year" type="number" placeholder="Rok" defaultValue={curYear} required
+              className="w-24 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+            />
+            <input
+              name="currentEbitda" type="number" step="0.01" placeholder="EBITDA (CZK)" required
+              className="flex-1 bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
+            />
+            <button type="submit" className="bg-brand-cyan text-brand-navy px-6 py-3.5 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-pink hover:text-white transition-all shadow-sm active:scale-95">
+              Uložit
+            </button>
+          </form>
+        </section>
+
+        {/* STRATEGICKÉ BOOSTERY */}
+        <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+          <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-6">Strategické boostery</h2>
+          <p className="text-[10px] text-gray-400 mb-4 ml-1">Boostery navyšují multiplikátor firmy při splnění podmínek.</p>
+
+          {plan.boosters.length === 0 && (
+            <p className="text-sm text-gray-400 italic mb-4">Zatím nejsou přidány žádné boostery.</p>
+          )}
+
+          <div className="space-y-2 mb-4">
+            {plan.boosters.map(b => (
+              <div key={b.id} className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-gray-900 text-sm truncate">{b.name}</p>
+                  {b.description && <p className="text-[10px] text-gray-400 truncate">{b.description}</p>}
+                </div>
+                <span className="text-[10px] font-black text-brand-pink flex-shrink-0">+{b.multiplierBoost}×</span>
+                <form action={togglePopBooster.bind(null, b.id, b.isAchieved, plan.id)}>
+                  <button type="submit" className={`px-3 py-1.5 rounded-xl font-black uppercase text-[8px] tracking-widest transition-all border active:scale-95 flex-shrink-0 ${
+                    b.isAchieved
+                      ? "bg-brand-green/10 text-brand-green border-brand-green/30"
+                      : "bg-gray-100 text-gray-400 border-gray-200 hover:border-gray-400"
+                  }`}>
+                    {b.isAchieved ? "Splněn" : "Nesplněn"}
+                  </button>
+                </form>
+                <form action={deletePopBooster.bind(null, b.id, plan.id)}>
+                  <button type="submit" className="text-[9px] font-black text-gray-400 hover:text-brand-pink transition-colors uppercase tracking-widest px-2 py-1 flex-shrink-0">
+                    ×
+                  </button>
+                </form>
+              </div>
+            ))}
+          </div>
+
+          <form action={createPopBooster.bind(null, plan.id)} className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <input
+              name="name" required placeholder="Název boosteru"
+              className="bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
+            />
+            <input
+              name="description" placeholder="Podmínka (volitelné)"
+              className="bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
+            />
+            <div className="flex gap-2">
+              <input
+                name="multiplierBoost" type="number" step="0.1" min="0" placeholder="+× boost" required
+                className="flex-1 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
+              />
+              <button type="submit" className="bg-brand-cyan text-brand-navy px-4 py-3.5 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-pink hover:text-white transition-all shadow-sm active:scale-95">
+                +
+              </button>
+            </div>
+          </form>
+        </section>
+
+        {/* PŘIŘAZENÍ UŽIVATELŮ */}
+        <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+          <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-6">Přiřazení manažeři</h2>
+
+          {plan.assignments.map(a => {
+            const pop = latestYearData ? calcPOP({
+              sharePercent:    a.sharePercent,
+              grantEbitda:     a.grantEbitda,
+              grantMultiplier: plan.baseMultiplier,
+              currentEbitda:   latestYearData.currentEbitda,
+              baseMultiplier:  plan.baseMultiplier,
+              boosters:        plan.boosters.map(b => ({ multiplierBoost: b.multiplierBoost, isAchieved: b.isAchieved })),
+            }) : null
+
+            const schedule = pop ? calcVestingSchedule({
+              grossGain:       pop.grossGain,
+              vestingYears:    plan.vestingYears,
+              vestingPercent:  100 / plan.vestingYears,
+              yearsSinceGrant: yearsSinceDate(a.grantDate),
+            }) : []
+
+            return (
+              <div key={a.id} className="mb-6 bg-gray-50 border border-gray-200 rounded-2xl overflow-hidden">
+                {/* Header */}
+                <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-200">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-black text-gray-900 text-sm italic uppercase truncate">
+                      {a.user.name ?? a.user.email ?? "—"}
+                    </p>
+                    <p className="text-[10px] text-brand-cyan font-bold mt-0.5">
+                      {a.sharePercent}% podíl · grant {new Date(a.grantDate).getFullYear()}
+                      {a.grantEbitda > 0 && ` · EBITDA při grantu ${fmt(a.grantEbitda)}`}
+                    </p>
+                  </div>
+                  {pop && (
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black">Aktuální hodnota POP</p>
+                      <p className="font-black text-brand-cyan text-base">{fmt(pop.grossGain)} CZK</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Edit form */}
+                <div className="px-5 py-4 border-b border-gray-200">
+                  <form action={upsertPopAssignment.bind(null, plan.id)} className="flex gap-3 flex-wrap">
+                    <input type="hidden" name="userId" value={a.userId} />
+                    <input
+                      name="sharePercent" type="number" step="0.01" defaultValue={a.sharePercent}
+                      placeholder="Podíl %"
+                      className="w-28 bg-white border border-gray-200 rounded-xl px-4 py-2.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+                    />
+                    <input
+                      name="grantDate" type="date" defaultValue={new Date(a.grantDate).toISOString().split("T")[0]}
+                      className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+                    />
+                    <input
+                      name="grantEbitda" type="number" step="0.01" defaultValue={a.grantEbitda}
+                      placeholder="EBITDA při grantu"
+                      className="flex-1 min-w-32 bg-white border border-gray-200 rounded-xl px-4 py-2.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
+                    />
+                    <button type="submit" className="bg-brand-cyan text-brand-navy px-4 py-2.5 rounded-xl font-black uppercase text-[9px] tracking-widest hover:bg-brand-pink hover:text-white transition-all shadow-sm active:scale-95 flex-shrink-0">
+                      Uložit
+                    </button>
+                    <form action={deletePopAssignment.bind(null, a.id, plan.id)}>
+                      <button type="submit" className="bg-brand-pink/10 text-brand-pink border border-brand-pink/20 px-4 py-2.5 rounded-xl font-black uppercase text-[9px] tracking-widest hover:bg-brand-pink hover:text-white transition-all active:scale-95">
+                        Odebrat
+                      </button>
+                    </form>
+                  </form>
+                </div>
+
+                {/* Vesting schedule */}
+                {schedule.length > 0 && (
+                  <div className="px-5 py-4">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Vesting splátky</p>
+                    <div className="space-y-2">
+                      {schedule.map(s => {
+                        const payment = a.payments.find(p => p.vestingYear === s.year)
+                        return (
+                          <div key={s.year} className="flex items-center gap-3 text-sm">
+                            <span className="w-6 text-center font-black text-brand-cyan text-[10px]">R{s.year}</span>
+                            <span className="flex-1 font-bold text-gray-700">{fmt(s.amount)} CZK</span>
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${
+                              payment?.isPaid ? "bg-brand-green/10 text-brand-green" : "bg-gray-100 text-gray-400"
+                            }`}>
+                              {payment?.isPaid ? `Vyplaceno ${payment.paidAt ? new Date(payment.paidAt).toLocaleDateString("cs-CZ") : ""}` : "Nevyplaceno"}
+                            </span>
+                            {payment?.isPaid ? (
+                              <form action={markPopPaymentUnpaid.bind(null, a.id, s.year, plan.id)}>
+                                <button type="submit" className="text-[9px] font-black text-gray-400 hover:text-brand-pink transition-colors uppercase tracking-widest px-2 py-0.5">
+                                  Zrušit
+                                </button>
+                              </form>
+                            ) : (
+                              <form action={markPopPaymentPaid.bind(null, a.id, s.year)} className="flex gap-1.5 items-center">
+                                <input
+                                  name="amount" type="number" step="0.01" placeholder="Částka"
+                                  className="w-28 bg-white border border-gray-200 rounded-lg px-3 py-1.5 font-bold text-xs outline-none focus:ring-1 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
+                                />
+                                <button type="submit" className="bg-brand-green/10 text-brand-green border border-brand-green/30 px-2 py-1.5 rounded-lg font-black uppercase text-[8px] tracking-widest hover:bg-brand-green hover:text-brand-navy transition-all active:scale-95">
+                                  Zaplatit
+                                </button>
+                              </form>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {unassignedUsers.length > 0 && (
+            <form action={upsertPopAssignment.bind(null, plan.id)} className="flex gap-3 flex-wrap mt-4">
+              <select
+                name="userId" required
+                className="flex-1 min-w-40 bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+              >
+                <option value="">— Vyberte manažera —</option>
+                {unassignedUsers.map(u => (
+                  <option key={u.id} value={u.id}>{u.name ?? u.email ?? "?"}</option>
+                ))}
+              </select>
+              <input
+                name="sharePercent" type="number" step="0.01" min="0" max="100" defaultValue="0" placeholder="Podíl %"
+                className="w-28 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+              />
+              <input
+                name="grantDate" type="date" defaultValue={new Date().toISOString().split("T")[0]}
+                className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+              />
+              <input
+                name="grantEbitda" type="number" step="0.01" defaultValue="0" placeholder="EBITDA při grantu"
+                className="flex-1 min-w-36 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
+              />
+              <button type="submit" className="bg-brand-cyan text-brand-navy px-6 py-3.5 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-pink hover:text-white transition-all shadow-sm active:scale-95 flex-shrink-0">
+                Přiřadit
+              </button>
+            </form>
+          )}
+        </section>
+
+        {/* NEBEZPEČNÁ ZÓNA */}
+        <section className="bg-white p-8 rounded-[2.5rem] border border-brand-pink/20 shadow-sm">
+          <h2 className="text-[11px] font-black text-brand-pink uppercase tracking-[0.3em] italic mb-6">Nebezpečná zóna</h2>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-black text-gray-900 text-sm">Smazat POP plán</p>
+              <p className="text-[11px] text-gray-400 mt-1">Trvale odstraní plán včetně boosterů, ročních dat a přiřazení.</p>
+            </div>
+            <form action={deletePopPlan.bind(null, plan.id)}>
+              <button type="submit" className="bg-brand-pink/10 text-brand-pink border border-brand-pink/30 px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-pink hover:text-white transition-all active:scale-95">
+                Smazat
+              </button>
+            </form>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  )
+}

@@ -102,6 +102,26 @@ export default async function Home({
   type PerfParamFull = { id: string; name: string; weight: number; threshold: number; sortOrder: number; gatesParamId: string | null; results: { year: number; quarter: number; actual: number; target: number }[] }
   const perfParamsTyped = perfParams as unknown as PerfParamFull[]
 
+  // PopAssignments – nová architektura POP
+  type PopAssignmentFull = {
+    id: string; sharePercent: number; grantDate: Date; grantEbitda: number
+    payments: { vestingYear: number; isPaid: boolean; paidAt: Date | null; amount: number | null }[]
+    popPlan: {
+      id: string; name: string; baseMultiplier: number; vestingYears: number; vestingGranularity: string
+      boosters:  { multiplierBoost: number; isAchieved: boolean }[]
+      yearData:  { year: number; currentEbitda: number }[]
+    }
+  }
+  const popAssignments = await (prisma as unknown as {
+    popAssignment: { findMany: (a: object) => Promise<PopAssignmentFull[]> }
+  }).popAssignment.findMany({
+    where:   { userId: dbUser.id },
+    include: {
+      payments: { orderBy: { vestingYear: "asc" } },
+      popPlan:  { include: { boosters: true, yearData: { orderBy: { year: "asc" } } } },
+    },
+  })
+
   const { quarter: nowQ, year: nowY } = currentQuarter()
   const curQ = q ? parseInt(q) : nowQ
   const curY = y ? parseInt(y) : nowY
@@ -153,27 +173,27 @@ export default async function Home({
   const weightedKpi = kpiTasksExt.reduce((s: number, t: KpiTaskExt, i: number) => s + t.weight * kpiNorm[i], 0)
   const kpiAch      = totalKpiW > 0 ? weightedKpi / totalKpiW : 0
 
-  // POP
-  const popResult = vestingBase && compensation ? calcPOP({
-    sharePercent:    compensation.sharePercent,
-    grantEbitda:     compensation.grantEbitda,
-    grantMultiplier: compensation.grantMultiplier,
-    currentEbitda:   vestingBase.currentEbitda,
-    baseMultiplier:  vestingBase.baseMultiplier,
-    boosters:        boosters.map(b => ({ multiplierBoost: b.multiplierBoost, isAchieved: b.isAchieved })),
-  }) : null
-
-  // Vesting
-  const yearsFromGrant = yearsSinceDate(compensation?.grantDate ?? new Date())
-  const vestingSchedule = (popResult && compensation) ? calcVestingSchedule({
-    grossGain:       popResult.grossGain,
-    vestingYears:    compensation.vestingYears,
-    vestingPercent:  compensation.vestingPercent,
-    yearsSinceGrant: yearsFromGrant,
-  }) : []
-
-  // Příští nevyplacená splátka
-  const nextVesting = vestingSchedule.find(v => v.year > yearsFromGrant) ?? null
+  // POP – nová architektura (PopAssignment)
+  const popCalcs = popAssignments.map(a => {
+    const latestYear = a.popPlan.yearData.at(-1)
+    const pop = latestYear ? calcPOP({
+      sharePercent:    a.sharePercent,
+      grantEbitda:     a.grantEbitda,
+      grantMultiplier: a.popPlan.baseMultiplier,
+      currentEbitda:   latestYear.currentEbitda,
+      baseMultiplier:  a.popPlan.baseMultiplier,
+      boosters:        a.popPlan.boosters,
+    }) : null
+    const yearsFromGrant = yearsSinceDate(a.grantDate)
+    const schedule = pop ? calcVestingSchedule({
+      grossGain:       pop.grossGain,
+      vestingYears:    a.popPlan.vestingYears,
+      vestingPercent:  100 / a.popPlan.vestingYears,
+      yearsSinceGrant: yearsFromGrant,
+    }) : []
+    return { assignment: a, pop, schedule, yearsFromGrant }
+  })
+  const totalPopGain = popCalcs.reduce((s, c) => s + (c.pop?.grossGain ?? 0), 0)
 
   const noData = !period || !compensation
 
@@ -197,9 +217,14 @@ export default async function Home({
               </a>
             )}
             {isAdmin && (
-              <a href="/admin" className="hidden sm:block bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/30 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-cyan hover:text-brand-navy transition-all">
-                Uživatelé
-              </a>
+              <>
+                <a href="/admin/pop" className="hidden sm:block text-gray-400 hover:text-brand-cyan text-[10px] font-black uppercase tracking-widest transition-colors">
+                  POP
+                </a>
+                <a href="/admin" className="hidden sm:block bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/30 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-cyan hover:text-brand-navy transition-all">
+                  Uživatelé
+                </a>
+              </>
             )}
             <div className="flex items-center gap-2">
               {session.user?.image && (
@@ -274,45 +299,66 @@ export default async function Home({
               <div className="absolute -right-20 -top-20 w-96 h-96 bg-brand-pink rounded-full opacity-10 blur-[100px]" />
               <div className="absolute -left-10 -bottom-10 w-64 h-64 bg-brand-cyan rounded-full opacity-10 blur-[80px]" />
               <div className="relative z-10">
-                <div className="flex flex-col md:flex-row justify-between items-start gap-8">
-                  <div>
-                    <div className="flex items-center gap-3 mb-2">
-                      <p className="text-[10px] font-black text-brand-pink uppercase tracking-[0.4em]">Phantom Capital Gain</p>
-                      <span className="text-[8px] font-black bg-brand-pink/20 text-brand-pink px-2 py-0.5 rounded-full uppercase tracking-widest border border-brand-pink/30">Průběžná projekce</span>
-                    </div>
-                    <p className="text-7xl md:text-8xl font-black tracking-tighter text-white italic leading-none">
-                      {fmt(popResult?.grossGain ?? 0)}
-                    </p>
-                    <p className="text-white/30 text-sm font-bold mt-2">CZK · Brutto · {period?.name}</p>
-                  </div>
-                  <div className="flex flex-col gap-4 min-w-[220px]">
-                    <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-2">
-                      <Row label="Hodnota firmy dnes" value={`${fmt(popResult?.currentFirmValue ?? 0)} CZK`} light />
-                      <Row label="Hodnota při grantu" value={`${fmt(popResult?.grantFirmValue ?? 0)} CZK`} light />
-                      <Row label="Vytvořená hodnota" value={`${fmt(popResult?.createdValue ?? 0)} CZK`} accent />
-                      <div className="pt-2 border-t border-white/10">
-                        <Row label="Koeficient" value={`${popResult?.currentMultiplier.toFixed(1)}×`} light />
-                        <Row label="z toho boostery" value={`+${popResult?.boosterTotal.toFixed(1)}×`} light />
-                        <Row label="Podíl" value={`${compensation?.sharePercent}%`} light />
+                <div className="flex items-center gap-3 mb-2">
+                  <p className="text-[10px] font-black text-brand-pink uppercase tracking-[0.4em]">Phantom Capital Gain</p>
+                  <span className="text-[8px] font-black bg-brand-pink/20 text-brand-pink px-2 py-0.5 rounded-full uppercase tracking-widest border border-brand-pink/30">Průběžná projekce</span>
+                </div>
+                <p className="text-7xl md:text-8xl font-black tracking-tighter text-white italic leading-none">
+                  {fmt(totalPopGain)}
+                </p>
+                <p className="text-white/30 text-sm font-bold mt-2">CZK · Brutto · celkem všechny POP plány</p>
+
+                {/* Per-plan breakdown */}
+                {popCalcs.map(({ assignment: a, pop, schedule }) => pop && (
+                  <div key={a.id} className="mt-6 pt-6 border-t border-white/10">
+                    <div className="flex flex-col md:flex-row justify-between items-start gap-6">
+                      <div>
+                        <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.3em] mb-1">{a.popPlan.name}</p>
+                        <p className="text-3xl font-black text-white">{fmt(pop.grossGain)} CZK</p>
+                        <p className="text-white/30 text-xs font-bold mt-1">
+                          Podíl {a.sharePercent}% · Grant {new Date(a.grantDate).getFullYear()}
+                        </p>
+                      </div>
+                      <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-1.5 min-w-[200px]">
+                        <Row label="Hodnota firmy dnes" value={`${fmt(pop.currentFirmValue)} CZK`} light />
+                        <Row label="Hodnota při grantu" value={`${fmt(pop.grantFirmValue)} CZK`} light />
+                        <Row label="Vytvořená hodnota" value={`${fmt(pop.createdValue)} CZK`} accent />
+                        <div className="pt-2 border-t border-white/10">
+                          <Row label="Koeficient" value={`${pop.currentMultiplier.toFixed(1)}×`} light />
+                          <Row label="z toho boostery" value={`+${pop.boosterTotal.toFixed(1)}×`} light />
+                        </div>
                       </div>
                     </div>
+                    {/* Boostery */}
+                    {a.popPlan.boosters.length > 0 && (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {a.popPlan.boosters.map((b, i) => (
+                          <div key={i} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black border ${b.isAchieved ? "bg-brand-green/20 border-brand-green/30 text-brand-green" : "bg-white/5 border-white/10 text-white/30"}`}>
+                            <span>{b.isAchieved ? "✓" : "○"}</span>
+                            <span>+{b.multiplierBoost}×</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Mini vesting strip */}
+                    {schedule.length > 0 && (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {schedule.map(v => {
+                          const paid = a.payments.find(p => p.vestingYear === v.year)
+                          return (
+                            <div key={v.year} className={`px-3 py-1.5 rounded-xl text-[9px] font-black border ${paid?.isPaid ? "bg-brand-green/20 border-brand-green/30 text-brand-green" : v.isCurrent ? "bg-brand-cyan/20 border-brand-cyan/30 text-brand-cyan" : "bg-white/5 border-white/10 text-white/30"}`}>
+                              R{v.year} · {fmt(v.amount)}
+                              {paid?.isPaid && " ✓"}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
-                </div>
+                ))}
 
-                {/* Boostery */}
-                {boosters.length > 0 && (
-                  <div className="mt-8 pt-6 border-t border-white/10">
-                    <p className="text-[9px] font-black text-white/30 uppercase tracking-[0.3em] mb-3">Strategické boostery</p>
-                    <div className="flex flex-wrap gap-2">
-                      {boosters.map(b => (
-                        <div key={b.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black border ${b.isAchieved ? "bg-brand-green/20 border-brand-green/30 text-brand-green" : "bg-white/5 border-white/10 text-white/30"}`}>
-                          <span>{b.isAchieved ? "✓" : "○"}</span>
-                          <span>{b.name}</span>
-                          <span className="opacity-60">+{b.multiplierBoost}×</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                {popCalcs.length === 0 && (
+                  <p className="text-white/20 text-sm font-bold mt-4">Nejsou přiřazeny žádné POP plány.</p>
                 )}
               </div>
             </section>
@@ -333,40 +379,43 @@ export default async function Home({
                   </div>
                 </section>
 
-                {/* Vesting schedule */}
-                {vestingSchedule.length > 0 && (
-                  <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-                    <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-4">Vesting POP</h2>
-                    <p className="text-[10px] text-gray-400 mb-3">
-                      {compensation?.vestingPercent}% ročně · {compensation?.vestingYears} let ·
-                      Grant: {compensation?.grantDate ? new Date(compensation.grantDate).toLocaleDateString('cs-CZ') : "—"}
-                    </p>
-                    {nextVesting && (
-                      <div className="mb-4 px-4 py-3 bg-brand-navy/5 rounded-2xl border border-brand-navy/10 flex justify-between items-center">
-                        <div>
-                          <p className="text-[9px] font-black text-brand-navy/50 uppercase tracking-widest">Příští splátka (rok {nextVesting.year})</p>
-                          <p className="font-black text-brand-navy text-lg">{fmt(nextVesting.amount)} CZK</p>
+                {/* Vesting schedule – per PopPlan */}
+                {popCalcs.filter(c => c.schedule.length > 0).map(({ assignment: a, pop, schedule }) => {
+                  const nextV = schedule.find(v => !a.payments.find(p => p.vestingYear === v.year && p.isPaid))
+                  return (
+                    <section key={a.id} className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+                      <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-1">Vesting POP</h2>
+                      <p className="text-[9px] text-brand-cyan font-black uppercase tracking-widest mb-3">{a.popPlan.name}</p>
+                      {nextV && (
+                        <div className="mb-4 px-4 py-3 bg-brand-navy/5 rounded-2xl border border-brand-navy/10 flex justify-between items-center">
+                          <div>
+                            <p className="text-[9px] font-black text-brand-navy/50 uppercase tracking-widest">Příští splátka (rok {nextV.year})</p>
+                            <p className="font-black text-brand-navy text-lg">{fmt(nextV.amount)} CZK</p>
+                          </div>
+                          <span className="text-2xl">📅</span>
                         </div>
-                        <span className="text-2xl">📅</span>
+                      )}
+                      <div className="space-y-2">
+                        {schedule.map(v => {
+                          const paid = a.payments.find(p => p.vestingYear === v.year && p.isPaid)
+                          return (
+                            <div key={v.year} className={`flex justify-between items-center px-3 py-2 rounded-xl ${v.isCurrent ? "bg-brand-cyan/10 border border-brand-cyan/20" : paid ? "bg-brand-green/5 border border-brand-green/20" : "bg-gray-50"}`}>
+                              <span className={`text-[10px] font-black uppercase tracking-wider ${v.isCurrent ? "text-brand-cyan" : paid ? "text-brand-green" : "text-gray-500"}`}>
+                                Rok {v.year} {v.isCurrent && "← nyní"} {paid && "✓"}
+                              </span>
+                              <span className={`font-black text-sm ${v.isCurrent ? "text-brand-cyan" : paid ? "text-brand-green" : "text-gray-700"}`}>
+                                {fmt(v.amount)} CZK
+                              </span>
+                            </div>
+                          )
+                        })}
                       </div>
-                    )}
-                    <div className="space-y-2">
-                      {vestingSchedule.map(v => (
-                        <div key={v.year} className={`flex justify-between items-center px-3 py-2 rounded-xl ${v.isCurrent ? "bg-brand-cyan/10 border border-brand-cyan/20" : "bg-gray-50"}`}>
-                          <span className={`text-[10px] font-black uppercase tracking-wider ${v.isCurrent ? "text-brand-cyan" : "text-gray-500"}`}>
-                            Rok {v.year} {v.isCurrent && "← nyní"}
-                          </span>
-                          <span className={`font-black text-sm ${v.isCurrent ? "text-brand-cyan" : "text-gray-700"}`}>
-                            {fmt(v.amount)} CZK
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-gray-400 mt-3 text-right">
-                      Celkem: {fmt(vestingSchedule.reduce((s, v) => s + v.amount, 0))} CZK
-                    </p>
-                  </section>
-                )}
+                      <p className="text-[10px] text-gray-400 mt-3 text-right">
+                        Celkem: {fmt(pop?.grossGain ?? 0)} CZK
+                      </p>
+                    </section>
+                  )
+                })}
               </div>
 
               {/* PRAVÝ SLOUP */}

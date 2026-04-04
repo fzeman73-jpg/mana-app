@@ -596,6 +596,184 @@ export async function closeQuarter(periodId: string, quarter: number, year: numb
   revalidatePath("/")
 }
 
+// ─── POP PLÁN ─────────────────────────────────────────────────────────────────
+
+type PopPlanModel = {
+  create: (a: object) => Promise<{ id: string }>
+  update: (a: object) => Promise<unknown>
+  delete: (a: object) => Promise<unknown>
+  findMany: (a: object) => Promise<unknown[]>
+  findUnique: (a: object) => Promise<unknown>
+}
+type PopPlanBoosterModel = {
+  create: (a: object) => Promise<unknown>
+  update: (a: object) => Promise<unknown>
+  delete: (a: object) => Promise<unknown>
+}
+type PopYearDataModel = {
+  upsert: (a: object) => Promise<unknown>
+  delete: (a: object) => Promise<unknown>
+}
+type PopAssignmentModel = {
+  upsert: (a: object) => Promise<unknown>
+  delete: (a: object) => Promise<unknown>
+  findMany: (a: object) => Promise<unknown[]>
+}
+type PopPaymentModel = {
+  upsert: (a: object) => Promise<unknown>
+  deleteMany: (a: object) => Promise<unknown>
+}
+
+function popPrisma() {
+  return prisma as unknown as {
+    popPlan:        PopPlanModel
+    popPlanBooster: PopPlanBoosterModel
+    popYearData:    PopYearDataModel
+    popAssignment:  PopAssignmentModel
+    popPayment:     PopPaymentModel
+  }
+}
+
+export async function createPopPlan(formData: FormData) {
+  const caller = await requireAdmin()
+  const data = {
+    name:              formData.get("name") as string,
+    description:       (formData.get("description") as string) || undefined,
+    baseMultiplier:    parseFloat(formData.get("baseMultiplier") as string) || 6.0,
+    vestingYears:      parseInt(formData.get("vestingYears") as string) || 4,
+    vestingGranularity: (formData.get("vestingGranularity") as string) || "YEARLY",
+  }
+  const plan = await popPrisma().popPlan.create({ data })
+  await audit(caller.email!, "CREATE_POP_PLAN", `PopPlan:${plan.id}`, undefined, data)
+  revalidatePath("/admin/pop")
+  redirect("/admin/pop/" + plan.id)
+}
+
+export async function updatePopPlan(planId: string, formData: FormData) {
+  const caller = await requireAdmin()
+  const data = {
+    name:              formData.get("name") as string,
+    description:       (formData.get("description") as string) || undefined,
+    baseMultiplier:    parseFloat(formData.get("baseMultiplier") as string) || 6.0,
+    vestingYears:      parseInt(formData.get("vestingYears") as string) || 4,
+    vestingGranularity: (formData.get("vestingGranularity") as string) || "YEARLY",
+  }
+  await popPrisma().popPlan.update({ where: { id: planId }, data })
+  await audit(caller.email!, "UPDATE_POP_PLAN", `PopPlan:${planId}`, undefined, data)
+  revalidatePath("/admin/pop")
+  revalidatePath("/admin/pop/" + planId)
+}
+
+export async function deletePopPlan(planId: string) {
+  const caller = await requireAdmin()
+  await audit(caller.email!, "DELETE_POP_PLAN", `PopPlan:${planId}`)
+  await popPrisma().popPlan.delete({ where: { id: planId } })
+  revalidatePath("/admin/pop")
+  redirect("/admin/pop")
+}
+
+export async function createPopBooster(planId: string, formData: FormData) {
+  const caller = await requireAdmin()
+  const data = {
+    popPlanId:       planId,
+    name:            formData.get("name") as string,
+    description:     (formData.get("description") as string) || undefined,
+    multiplierBoost: parseFloat(formData.get("multiplierBoost") as string) || 0,
+  }
+  await popPrisma().popPlanBooster.create({ data })
+  await audit(caller.email!, "CREATE_POP_BOOSTER", `PopPlan:${planId}`, undefined, data)
+  revalidatePath("/admin/pop/" + planId)
+  revalidatePath("/")
+}
+
+export async function togglePopBooster(boosterId: string, current: boolean, planId: string) {
+  const caller = await requireAdminOrManager()
+  await popPrisma().popPlanBooster.update({
+    where: { id: boosterId },
+    data: { isAchieved: !current, achievedAt: !current ? new Date() : null },
+  })
+  await audit(caller.email!, "TOGGLE_POP_BOOSTER", `PopPlanBooster:${boosterId}`, { isAchieved: current }, { isAchieved: !current })
+  revalidatePath("/admin/pop/" + planId)
+  revalidatePath("/")
+}
+
+export async function deletePopBooster(boosterId: string, planId: string) {
+  const caller = await requireAdmin()
+  await audit(caller.email!, "DELETE_POP_BOOSTER", `PopPlanBooster:${boosterId}`)
+  await popPrisma().popPlanBooster.delete({ where: { id: boosterId } })
+  revalidatePath("/admin/pop/" + planId)
+  revalidatePath("/")
+}
+
+export async function upsertPopYearData(planId: string, formData: FormData) {
+  const caller = await requireAdmin()
+  const year          = parseInt(formData.get("year") as string)
+  const currentEbitda = parseFloat(formData.get("currentEbitda") as string) || 0
+  await popPrisma().popYearData.upsert({
+    where:  { popPlanId_year: { popPlanId: planId, year } },
+    update: { currentEbitda },
+    create: { popPlanId: planId, year, currentEbitda },
+  })
+  await audit(caller.email!, "UPSERT_POP_YEAR", `PopPlan:${planId}`, undefined, { year, currentEbitda })
+  revalidatePath("/admin/pop/" + planId)
+  revalidatePath("/")
+}
+
+export async function deletePopYearData(yearDataId: string, planId: string) {
+  const caller = await requireAdmin()
+  await popPrisma().popYearData.delete({ where: { id: yearDataId } })
+  await audit(caller.email!, "DELETE_POP_YEAR", `PopPlan:${planId}`)
+  revalidatePath("/admin/pop/" + planId)
+}
+
+export async function upsertPopAssignment(planId: string, formData: FormData) {
+  const caller = await requireAdmin()
+  const userId     = formData.get("userId") as string
+  const grantDateRaw = formData.get("grantDate") as string
+  const data = {
+    sharePercent: parseFloat(formData.get("sharePercent") as string) || 0,
+    grantDate:    grantDateRaw ? new Date(grantDateRaw) : new Date(),
+    grantEbitda:  parseFloat(formData.get("grantEbitda") as string) || 0,
+  }
+  await popPrisma().popAssignment.upsert({
+    where:  { userId_popPlanId: { userId, popPlanId: planId } },
+    update: data,
+    create: { userId, popPlanId: planId, ...data },
+  })
+  await audit(caller.email!, "UPSERT_POP_ASSIGNMENT", `PopPlan:${planId}`, undefined, { userId, ...data })
+  revalidatePath("/admin/pop/" + planId)
+  revalidatePath("/")
+}
+
+export async function deletePopAssignment(assignmentId: string, planId: string) {
+  const caller = await requireAdmin()
+  await audit(caller.email!, "DELETE_POP_ASSIGNMENT", `PopAssignment:${assignmentId}`)
+  await popPrisma().popAssignment.delete({ where: { id: assignmentId } })
+  revalidatePath("/admin/pop/" + planId)
+  revalidatePath("/")
+}
+
+export async function markPopPaymentPaid(assignmentId: string, vestingYear: number, formData: FormData) {
+  const caller = await requireAdmin()
+  const amount = parseFloat(formData.get("amount") as string) || null
+  await popPrisma().popPayment.upsert({
+    where:  { assignmentId_vestingYear: { assignmentId, vestingYear } },
+    update: { isPaid: true, paidAt: new Date(), amount: amount ?? undefined },
+    create: { assignmentId, vestingYear, isPaid: true, paidAt: new Date(), amount: amount ?? undefined },
+  })
+  await audit(caller.email!, "MARK_POP_PAYMENT_PAID", `PopAssignment:${assignmentId}`, undefined, { vestingYear, amount })
+  revalidatePath("/admin/pop")
+  revalidatePath("/")
+}
+
+export async function markPopPaymentUnpaid(assignmentId: string, vestingYear: number, planId: string) {
+  const caller = await requireAdmin()
+  await popPrisma().popPayment.deleteMany({ where: { assignmentId, vestingYear } })
+  await audit(caller.email!, "MARK_POP_PAYMENT_UNPAID", `PopAssignment:${assignmentId}`, undefined, { vestingYear })
+  revalidatePath("/admin/pop/" + planId)
+  revalidatePath("/")
+}
+
 // ─── VESTING PLATBY ───────────────────────────────────────────────────────────
 
 export async function markVestingPaid(compensationId: string, vestingYear: number, formData: FormData) {
