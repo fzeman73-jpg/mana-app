@@ -59,15 +59,22 @@ export type PopResult = {
 }
 
 export type VestingInput = {
-  grossGain:      number
-  vestingYears:   number
-  vestingPercent: number   // % ročně (např. 25)
-  yearsSinceGrant: number
+  grossGain:          number
+  granularity:        "YEARLY" | "QUARTERLY"
+  // YEARLY
+  vestingYears:       number
+  vestingPaymentDay:  number   // den vyplacení, např. 1
+  vestingPaymentMonth: number  // měsíc vyplacení, např. 5 = květen
+  grantYear:          number   // rok grantu (pro výpočet dat)
+  // QUARTERLY
+  vestingQuarters:    number
 }
 
 export type VestingSchedule = {
-  year:       number
-  percentage: number
+  index:      number   // pořadí splátky (rok 1–N nebo kvartál 1–N)
+  label:      string   // zobrazovaný popis, např. "Rok 1" nebo "Q2 2027"
+  payDate:    string   // datum vyplacení, např. "1.5.2027" nebo "15.4.2027"
+  percentage: number   // % z celku
   amount:     number
   isCurrent:  boolean
 }
@@ -177,13 +184,48 @@ export function calcPOP(input: PopInput): PopResult {
 // ─── VESTING ─────────────────────────────────────────────────────────────────
 
 export function calcVestingSchedule(input: VestingInput): VestingSchedule[] {
+  const now = new Date()
+
+  if (input.granularity === "QUARTERLY") {
+    const count = input.vestingQuarters
+    const pct   = count > 0 ? 100 / count : 0
+    // Q1 ends Mar 31 → pay Apr 15, Q2→Jul 15, Q3→Oct 15, Q4→Jan 15 next year
+    const payMonths = [4, 7, 10, 1]
+    const schedule: VestingSchedule[] = []
+    for (let i = 0; i < count; i++) {
+      const quarterInYear = i % 4                      // 0–3
+      const yearOffset    = Math.floor(i / 4)
+      const payMonth      = payMonths[quarterInYear]
+      const payYear       = input.grantYear + yearOffset + (quarterInYear === 3 ? 1 : 0)
+      const isCurrent     = now >= new Date(payYear, payMonth - 1, 1) &&
+                            now < new Date(payYear, payMonth, 1)
+      schedule.push({
+        index:      i + 1,
+        label:      `Q${quarterInYear + 1} ${input.grantYear + yearOffset}`,
+        payDate:    `15.${String(payMonth).padStart(2, "0")}.${payYear}`,
+        percentage: pct,
+        amount:     input.grossGain * (pct / 100),
+        isCurrent,
+      })
+    }
+    return schedule
+  }
+
+  // YEARLY
+  const count = input.vestingYears
+  const pct   = count > 0 ? 100 / count : 0
   const schedule: VestingSchedule[] = []
-  for (let year = 1; year <= input.vestingYears; year++) {
+  for (let year = 1; year <= count; year++) {
+    const payYear = input.grantYear + year
+    const isCurrent = now.getFullYear() === payYear &&
+                      now.getMonth() + 1 <= input.vestingPaymentMonth
     schedule.push({
-      year,
-      percentage: input.vestingPercent,
-      amount:     input.grossGain * (input.vestingPercent / 100),
-      isCurrent:  year === input.yearsSinceGrant,
+      index:      year,
+      label:      `Rok ${year}`,
+      payDate:    `${input.vestingPaymentDay}.${String(input.vestingPaymentMonth).padStart(2, "0")}.${payYear}`,
+      percentage: pct,
+      amount:     input.grossGain * (pct / 100),
+      isCurrent,
     })
   }
   return schedule

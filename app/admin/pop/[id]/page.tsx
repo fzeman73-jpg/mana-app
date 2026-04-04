@@ -9,7 +9,7 @@ import {
   upsertPopAssignment, deletePopAssignment,
   markPopPaymentPaid, markPopPaymentUnpaid,
 } from "@/lib/actions"
-import { calcPOP, calcVestingSchedule, yearsSinceDate } from "@/lib/calculator"
+import { calcPOP, calcVestingSchedule } from "@/lib/calculator"
 
 const fmt = (n: number) => Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(Math.round(n))
 
@@ -23,7 +23,9 @@ type PopAssign     = {
 }
 type PopPlanFull   = {
   id: string; name: string; description: string | null
-  baseMultiplier: number; grantEbitda: number; vestingYears: number; vestingGranularity: string
+  baseMultiplier: number; grantEbitda: number
+  vestingGranularity: string; vestingYears: number
+  vestingPaymentDay: number; vestingPaymentMonth: number; vestingQuarters: number
   boosters:    PopBooster[]
   yearData:    PopYearData[]
   assignments: PopAssign[]
@@ -104,7 +106,8 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
                 className="bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
               />
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {/* Řádek 1: EBITDA + multiplikátor + frekvence */}
+            <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Vstupní EBITDA (CZK)</label>
                 <input
@@ -120,13 +123,6 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
                 />
               </div>
               <div>
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Délka vestingu (roky)</label>
-                <input
-                  name="vestingYears" type="number" min="1" max="10" defaultValue={plan.vestingYears} required
-                  className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
-                />
-              </div>
-              <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Frekvence vyplácení</label>
                 <select
                   name="vestingGranularity" defaultValue={plan.vestingGranularity}
@@ -137,6 +133,53 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
                 </select>
               </div>
             </div>
+            {/* Řádek 2: dle frekvence */}
+            {plan.vestingGranularity === "QUARTERLY" ? (
+              <div className="grid grid-cols-2 gap-3 p-4 bg-brand-cyan/5 border border-brand-cyan/20 rounded-2xl">
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Počet kvartálů</label>
+                  <input
+                    name="vestingQuarters" type="number" min="1" max="40" defaultValue={plan.vestingQuarters} required
+                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+                  />
+                </div>
+                <div className="flex items-end pb-0.5">
+                  <p className="text-[10px] text-gray-500 leading-relaxed">
+                    Splátky 15. den měsíce po konci každého kvartálu<br />
+                    (Q1→15.4., Q2→15.7., Q3→15.10., Q4→15.1.)<br />
+                    <span className="text-brand-cyan font-black">Každá splátka: {plan.vestingQuarters > 0 ? Math.round(100 / plan.vestingQuarters * 10) / 10 : 0}% · Celkem: 100%</span>
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-3 p-4 bg-brand-cyan/5 border border-brand-cyan/20 rounded-2xl">
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Počet let</label>
+                  <input
+                    name="vestingYears" type="number" min="1" max="10" defaultValue={plan.vestingYears} required
+                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Den vyplacení</label>
+                  <input
+                    name="vestingPaymentDay" type="number" min="1" max="28" defaultValue={plan.vestingPaymentDay} required
+                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Měsíc vyplacení</label>
+                  <select
+                    name="vestingPaymentMonth" defaultValue={plan.vestingPaymentMonth}
+                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+                  >
+                    {["Leden","Únor","Březen","Duben","Květen","Červen","Červenec","Srpen","Září","Říjen","Listopad","Prosinec"].map((m, i) => (
+                      <option key={i+1} value={i+1}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
             <button type="submit" className="bg-brand-cyan text-brand-navy px-6 py-3.5 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-pink hover:text-white transition-all shadow-sm active:scale-95">
               Uložit
             </button>
@@ -251,10 +294,13 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
             }) : null
 
             const schedule = pop ? calcVestingSchedule({
-              grossGain:       pop.grossGain,
-              vestingYears:    plan.vestingYears,
-              vestingPercent:  100 / plan.vestingYears,
-              yearsSinceGrant: yearsSinceDate(a.grantDate),
+              grossGain:           pop.grossGain,
+              granularity:         plan.vestingGranularity as "YEARLY" | "QUARTERLY",
+              vestingYears:        plan.vestingYears,
+              vestingPaymentDay:   plan.vestingPaymentDay,
+              vestingPaymentMonth: plan.vestingPaymentMonth,
+              vestingQuarters:     plan.vestingQuarters,
+              grantYear:           new Date(a.grantDate).getFullYear(),
             }) : []
 
             return (
@@ -316,24 +362,27 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Vesting splátky</p>
                     <div className="space-y-2">
                       {schedule.map(s => {
-                        const payment = a.payments.find(p => p.vestingYear === s.year)
+                        const payment = a.payments.find(p => p.vestingYear === s.index)
                         return (
-                          <div key={s.year} className="flex items-center gap-3 text-sm">
-                            <span className="w-6 text-center font-black text-brand-cyan text-[10px]">R{s.year}</span>
-                            <span className="flex-1 font-bold text-gray-700">{fmt(s.amount)}</span>
-                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${
+                          <div key={s.index} className="flex items-center gap-3 text-sm">
+                            <div className="min-w-0 flex-1">
+                              <span className="font-black text-brand-cyan text-[10px]">{s.label}</span>
+                              <span className="text-[9px] text-gray-400 ml-2">{s.payDate}</span>
+                              <span className="font-bold text-gray-700 ml-3">{fmt(s.amount)}</span>
+                            </div>
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest flex-shrink-0 ${
                               payment?.isPaid ? "bg-brand-green/10 text-brand-green" : "bg-gray-100 text-gray-400"
                             }`}>
                               {payment?.isPaid ? `Vyplaceno ${payment.paidAt ? new Date(payment.paidAt).toLocaleDateString("cs-CZ") : ""}` : "Nevyplaceno"}
                             </span>
                             {payment?.isPaid ? (
-                              <form action={markPopPaymentUnpaid.bind(null, a.id, s.year, plan.id)}>
+                              <form action={markPopPaymentUnpaid.bind(null, a.id, s.index, plan.id)}>
                                 <button type="submit" className="text-[9px] font-black text-gray-400 hover:text-brand-pink transition-colors uppercase tracking-widest px-2 py-0.5">
                                   Zrušit
                                 </button>
                               </form>
                             ) : (
-                              <form action={markPopPaymentPaid.bind(null, a.id, s.year)} className="flex gap-1.5 items-center">
+                              <form action={markPopPaymentPaid.bind(null, a.id, s.index)} className="flex gap-1.5 items-center">
                                 <input
                                   name="amount" type="number" step="0.01" placeholder="Částka"
                                   className="w-28 bg-white border border-gray-200 rounded-lg px-3 py-1.5 font-bold text-xs outline-none focus:ring-1 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"

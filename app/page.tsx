@@ -1,7 +1,7 @@
 import { auth, signIn, signOut } from "@/auth"
 import { prisma } from "@/lib/db"
 import { loginWithCredentials, adminToggleKpiTask, updateKpiTaskCompletion } from "@/lib/actions"
-import { calcBonus, calcPOP, calcVestingSchedule, yearsSinceDate, currentQuarter } from "@/lib/calculator"
+import { calcBonus, calcPOP, calcVestingSchedule, currentQuarter } from "@/lib/calculator"
 import Image from "next/image"
 
 const fmt = (n: number) => Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', maximumFractionDigits: 0 }).format(Math.round(n))
@@ -107,7 +107,9 @@ export default async function Home({
     id: string; sharePercent: number; grantDate: Date; grantEbitda: number
     payments: { vestingYear: number; isPaid: boolean; paidAt: Date | null; amount: number | null }[]
     popPlan: {
-      id: string; name: string; baseMultiplier: number; grantEbitda: number; vestingYears: number; vestingGranularity: string
+      id: string; name: string; baseMultiplier: number; grantEbitda: number
+      vestingGranularity: string; vestingYears: number
+      vestingPaymentDay: number; vestingPaymentMonth: number; vestingQuarters: number
       boosters:  { multiplierBoost: number; isAchieved: boolean }[]
       yearData:  { year: number; currentEbitda: number }[]
     }
@@ -185,14 +187,16 @@ export default async function Home({
       baseMultiplier:  a.popPlan.baseMultiplier,
       boosters:        a.popPlan.boosters,
     }) : null
-    const yearsFromGrant = yearsSinceDate(a.grantDate)
     const schedule = pop ? calcVestingSchedule({
-      grossGain:       pop.grossGain,
-      vestingYears:    a.popPlan.vestingYears,
-      vestingPercent:  100 / a.popPlan.vestingYears,
-      yearsSinceGrant: yearsFromGrant,
+      grossGain:           pop.grossGain,
+      granularity:         a.popPlan.vestingGranularity as "YEARLY" | "QUARTERLY",
+      vestingYears:        a.popPlan.vestingYears,
+      vestingPaymentDay:   a.popPlan.vestingPaymentDay,
+      vestingPaymentMonth: a.popPlan.vestingPaymentMonth,
+      vestingQuarters:     a.popPlan.vestingQuarters,
+      grantYear:           new Date(a.grantDate).getFullYear(),
     }) : []
-    return { assignment: a, pop, schedule, yearsFromGrant }
+    return { assignment: a, pop, schedule }
   })
   const totalPopGain = popCalcs.reduce((s, c) => s + (c.pop?.grossGain ?? 0), 0)
 
@@ -345,10 +349,10 @@ export default async function Home({
                     {schedule.length > 0 && (
                       <div className="mt-4 flex flex-wrap gap-2">
                         {schedule.map(v => {
-                          const paid = a.payments.find(p => p.vestingYear === v.year)
+                          const paid = a.payments.find(p => p.vestingYear === v.index)
                           return (
-                            <div key={v.year} className={`px-3 py-1.5 rounded-xl text-[9px] font-black border ${paid?.isPaid ? "bg-brand-green/20 border-brand-green/30 text-brand-green" : v.isCurrent ? "bg-brand-cyan/20 border-brand-cyan/30 text-brand-cyan" : "bg-white/5 border-white/10 text-white/30"}`}>
-                              R{v.year} · {fmt(v.amount)}
+                            <div key={v.index} className={`px-3 py-1.5 rounded-xl text-[9px] font-black border ${paid?.isPaid ? "bg-brand-green/20 border-brand-green/30 text-brand-green" : v.isCurrent ? "bg-brand-cyan/20 border-brand-cyan/30 text-brand-cyan" : "bg-white/5 border-white/10 text-white/30"}`}>
+                              {v.label} · {v.payDate} · {fmt(v.amount)}
                               {paid?.isPaid && " ✓"}
                             </div>
                           )
@@ -382,7 +386,7 @@ export default async function Home({
 
                 {/* Vesting schedule – per PopPlan */}
                 {popCalcs.filter(c => c.schedule.length > 0).map(({ assignment: a, pop, schedule }) => {
-                  const nextV = schedule.find(v => !a.payments.find(p => p.vestingYear === v.year && p.isPaid))
+                  const nextV = schedule.find(v => !a.payments.find(p => p.vestingYear === v.index && p.isPaid))
                   return (
                     <section key={a.id} className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
                       <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-1">Vesting POP</h2>
@@ -390,20 +394,24 @@ export default async function Home({
                       {nextV && (
                         <div className="mb-4 px-4 py-3 bg-brand-navy/5 rounded-2xl border border-brand-navy/10 flex justify-between items-center">
                           <div>
-                            <p className="text-[9px] font-black text-brand-navy/50 uppercase tracking-widest">Příští splátka (rok {nextV.year})</p>
+                            <p className="text-[9px] font-black text-brand-navy/50 uppercase tracking-widest">Příští splátka — {nextV.label}</p>
                             <p className="font-black text-brand-navy text-lg">{fmt(nextV.amount)}</p>
+                            <p className="text-[9px] text-brand-navy/40 mt-0.5">{nextV.payDate}</p>
                           </div>
                           <span className="text-2xl">📅</span>
                         </div>
                       )}
                       <div className="space-y-2">
                         {schedule.map(v => {
-                          const paid = a.payments.find(p => p.vestingYear === v.year && p.isPaid)
+                          const paid = a.payments.find(p => p.vestingYear === v.index && p.isPaid)
                           return (
-                            <div key={v.year} className={`flex justify-between items-center px-3 py-2 rounded-xl ${v.isCurrent ? "bg-brand-cyan/10 border border-brand-cyan/20" : paid ? "bg-brand-green/5 border border-brand-green/20" : "bg-gray-50"}`}>
-                              <span className={`text-[10px] font-black uppercase tracking-wider ${v.isCurrent ? "text-brand-cyan" : paid ? "text-brand-green" : "text-gray-500"}`}>
-                                Rok {v.year} {v.isCurrent && "← nyní"} {paid && "✓"}
-                              </span>
+                            <div key={v.index} className={`flex justify-between items-center px-3 py-2 rounded-xl ${v.isCurrent ? "bg-brand-cyan/10 border border-brand-cyan/20" : paid ? "bg-brand-green/5 border border-brand-green/20" : "bg-gray-50"}`}>
+                              <div>
+                                <span className={`text-[10px] font-black uppercase tracking-wider ${v.isCurrent ? "text-brand-cyan" : paid ? "text-brand-green" : "text-gray-500"}`}>
+                                  {v.label} {v.isCurrent && "← nyní"} {paid && "✓"}
+                                </span>
+                                <span className="text-[9px] text-gray-400 ml-2">{v.payDate}</span>
+                              </div>
                               <span className={`font-black text-sm ${v.isCurrent ? "text-brand-cyan" : paid ? "text-brand-green" : "text-gray-700"}`}>
                                 {fmt(v.amount)}
                               </span>

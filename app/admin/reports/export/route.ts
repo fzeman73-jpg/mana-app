@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
-import { calcBonus, calcPOP, calcVestingSchedule, yearsSinceDate } from "@/lib/calculator"
+import { calcBonus, calcPOP, calcVestingSchedule } from "@/lib/calculator"
 import * as XLSX from "xlsx"
 
 export async function GET(req: NextRequest) {
@@ -134,21 +134,23 @@ export async function GET(req: NextRequest) {
       boosters:        boosters.map(b => ({ multiplierBoost: b.multiplierBoost, isAchieved: b.isAchieved })),
     }) : null
 
-    const vestingPercent = (comp as { vestingPercent: number }).vestingPercent ?? 25
-    const vestingYears   = (comp as { vestingYears: number }).vestingYears ?? 4
+    const vestingYears = (comp as { vestingYears: number }).vestingYears ?? 4
     const schedule = pop ? calcVestingSchedule({
-      grossGain:       pop.grossGain,
+      grossGain:           pop.grossGain,
+      granularity:         "YEARLY",
       vestingYears,
-      vestingPercent,
-      yearsSinceGrant: yearsSinceDate(comp.grantDate),
+      vestingPaymentDay:   1,
+      vestingPaymentMonth: 5,
+      vestingQuarters:     vestingYears * 4,
+      grantYear:           new Date(comp.grantDate).getFullYear(),
     }) : []
 
     for (const s of schedule) {
-      const payment = comp.payments.find(p => p.vestingYear === s.year)
+      const payment = comp.payments.find(p => p.vestingYear === s.index)
       vestingRows.push([
         comp.user.name ?? comp.user.email ?? "?",
-        s.year,
-        s.percentage,
+        s.label,
+        Math.round(s.percentage),
         Math.round(s.amount),
         payment?.isPaid ? "Ano" : "Ne",
         payment?.paidAt ? new Date(payment.paidAt).toLocaleDateString("cs-CZ") : "",

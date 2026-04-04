@@ -1,6 +1,6 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
-import { calcBonus, calcPOP, calcVestingSchedule, yearsSinceDate } from "@/lib/calculator"
+import { calcBonus, calcPOP, calcVestingSchedule } from "@/lib/calculator"
 import { markVestingPaid, markVestingUnpaid } from "@/lib/actions"
 import Image from "next/image"
 import { redirect } from "next/navigation"
@@ -94,13 +94,16 @@ export default async function ReportsPage({
         boosters:        boosters.map(b => ({ multiplierBoost: b.multiplierBoost, isAchieved: b.isAchieved })),
       }) : null
 
-      const vestingPercent = (comp as { vestingPercent: number }).vestingPercent ?? 25
       const vestingYears   = (comp as { vestingYears: number }).vestingYears ?? 4
+      const vestingPercent = 100 / vestingYears
       const vestingSchedule = pop ? calcVestingSchedule({
-        grossGain:       pop.grossGain,
+        grossGain:           pop.grossGain,
+        granularity:         "YEARLY",
         vestingYears,
-        vestingPercent,
-        yearsSinceGrant: yearsSinceDate(comp.grantDate),
+        vestingPaymentDay:   1,
+        vestingPaymentMonth: 5,
+        vestingQuarters:     vestingYears * 4,
+        grantYear:           new Date(comp.grantDate).getFullYear(),
       }) : []
 
       return { comp, bonus, pop, vestingSchedule, vestingYears, vestingPercent }
@@ -348,15 +351,16 @@ export default async function ReportsPage({
                       </div>
                       <div className="divide-y divide-gray-100">
                         {vestingSchedule.map(v => {
-                          const payment = comp.payments.find(p => p.vestingYear === v.year)
+                          const payment = comp.payments.find(p => p.vestingYear === v.index)
                           const isPaid  = payment?.isPaid ?? false
                           return (
-                            <div key={v.year} className={`flex items-center gap-4 px-5 py-3 ${isPaid ? "bg-brand-green/3" : ""}`}>
+                            <div key={v.index} className={`flex items-center gap-4 px-5 py-3 ${isPaid ? "bg-brand-green/3" : ""}`}>
                               <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isPaid ? "bg-brand-green" : v.isCurrent ? "bg-brand-cyan" : "bg-gray-300"}`} />
-                              <span className={`text-sm font-black w-14 ${v.isCurrent ? "text-brand-cyan" : "text-gray-500"}`}>
-                                Rok {v.year}
+                              <span className={`text-sm font-black w-20 ${v.isCurrent ? "text-brand-cyan" : "text-gray-500"}`}>
+                                {v.label}
                               </span>
-                              <span className="text-[10px] text-gray-400 w-10">{v.percentage}%</span>
+                              <span className="text-[10px] text-gray-400 w-16">{v.payDate}</span>
+                              <span className="text-[10px] text-gray-400 w-8">{Math.round(v.percentage)}%</span>
                               <span className="font-black text-gray-900 flex-1">{fmt(v.amount)}</span>
                               {isPaid ? (
                                 <div className="flex items-center gap-3">
@@ -364,14 +368,14 @@ export default async function ReportsPage({
                                     ✓ Vyplaceno {payment?.paidAt ? new Date(payment.paidAt).toLocaleDateString('cs-CZ') : ""}
                                     {payment?.amount ? ` · ${fmt(payment.amount)}` : ""}
                                   </span>
-                                  <form action={markVestingUnpaid.bind(null, comp.id, v.year)}>
+                                  <form action={markVestingUnpaid.bind(null, comp.id, v.index)}>
                                     <button className="text-[9px] font-black text-gray-400 hover:text-brand-pink transition-colors uppercase tracking-wider">
                                       Zrušit
                                     </button>
                                   </form>
                                 </div>
                               ) : (
-                                <form action={markVestingPaid.bind(null, comp.id, v.year)} className="flex items-center gap-2">
+                                <form action={markVestingPaid.bind(null, comp.id, v.index)} className="flex items-center gap-2">
                                   <input
                                     name="amount"
                                     type="number"

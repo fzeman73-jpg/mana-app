@@ -639,10 +639,13 @@ export async function createPopPlan(formData: FormData) {
   const data = {
     name:              formData.get("name") as string,
     description:       (formData.get("description") as string) || undefined,
-    baseMultiplier:    parseFloat(formData.get("baseMultiplier") as string) || 6.0,
-    grantEbitda:       parseFloat(formData.get("grantEbitda") as string) || 0,
-    vestingYears:      parseInt(formData.get("vestingYears") as string) || 4,
+    baseMultiplier:     parseFloat(formData.get("baseMultiplier") as string) || 6.0,
+    grantEbitda:        parseFloat(formData.get("grantEbitda") as string) || 0,
     vestingGranularity: (formData.get("vestingGranularity") as string) || "YEARLY",
+    vestingYears:       parseInt(formData.get("vestingYears") as string) || 4,
+    vestingPaymentDay:  parseInt(formData.get("vestingPaymentDay") as string) || 1,
+    vestingPaymentMonth: parseInt(formData.get("vestingPaymentMonth") as string) || 5,
+    vestingQuarters:    parseInt(formData.get("vestingQuarters") as string) || 16,
   }
   const plan = await popPrisma().popPlan.create({ data })
   await audit(caller.email!, "CREATE_POP_PLAN", `PopPlan:${plan.id}`, undefined, data)
@@ -655,10 +658,13 @@ export async function updatePopPlan(planId: string, formData: FormData) {
   const data = {
     name:              formData.get("name") as string,
     description:       (formData.get("description") as string) || undefined,
-    baseMultiplier:    parseFloat(formData.get("baseMultiplier") as string) || 6.0,
-    grantEbitda:       parseFloat(formData.get("grantEbitda") as string) || 0,
-    vestingYears:      parseInt(formData.get("vestingYears") as string) || 4,
+    baseMultiplier:     parseFloat(formData.get("baseMultiplier") as string) || 6.0,
+    grantEbitda:        parseFloat(formData.get("grantEbitda") as string) || 0,
     vestingGranularity: (formData.get("vestingGranularity") as string) || "YEARLY",
+    vestingYears:       parseInt(formData.get("vestingYears") as string) || 4,
+    vestingPaymentDay:  parseInt(formData.get("vestingPaymentDay") as string) || 1,
+    vestingPaymentMonth: parseInt(formData.get("vestingPaymentMonth") as string) || 5,
+    vestingQuarters:    parseInt(formData.get("vestingQuarters") as string) || 16,
   }
   await popPrisma().popPlan.update({ where: { id: planId }, data })
   await audit(caller.email!, "UPDATE_POP_PLAN", `PopPlan:${planId}`, undefined, data)
