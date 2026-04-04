@@ -31,7 +31,7 @@ export default async function ParametersPage({
 
   const [periods, users] = await Promise.all([
     prisma.period.findMany({ orderBy: { startDate: "desc" } }),
-    prisma.user.findMany({ where: { isAllowed: true }, orderBy: { name: "asc" } }),
+    prisma.user.findMany({ where: { isAllowed: true }, include: { division: true }, orderBy: { name: "asc" } }),
   ])
 
   const sel  = periods.find(p => p.id === periodId) ?? null
@@ -90,13 +90,17 @@ export default async function ParametersPage({
             </h1>
             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Firemní metriky · Odměny · POP</p>
           </div>
-          <div className="w-px h-7 bg-gray-200" />
-          <div>
-            <p className="text-sm font-black text-gray-900">{caller?.name || caller?.email}</p>
-            <p className="text-[9px] font-black text-brand-cyan uppercase tracking-widest">
-              {(caller as { division?: { name: string } | null })?.division?.name ?? "Bez divize"}
-            </p>
-          </div>
+          {selU && (
+            <>
+              <div className="w-px h-7 bg-gray-200" />
+              <div>
+                <p className="text-sm font-black text-gray-900">{selU.name || selU.email}</p>
+                <p className="text-[9px] font-black text-brand-cyan uppercase tracking-widest">
+                  {(selU as { division?: { name: string } | null })?.division?.name ?? "Bez divize"}
+                </p>
+              </div>
+            </>
+          )}
         </div>
         <div className="flex items-center gap-3">
           {sel && (
