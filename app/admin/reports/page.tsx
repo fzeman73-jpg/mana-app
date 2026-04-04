@@ -169,17 +169,17 @@ export default async function ReportsPage({
               <div className="bg-brand-navy text-white p-5 rounded-[2rem]">
                 <p className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-1">POP závazek celkem</p>
                 <p className="text-2xl font-black">{fmt(totalPopLiability)}</p>
-                <p className="text-[10px] text-white/50 mt-0.5">CZK hrubý zisk</p>
+                <p className="text-[10px] text-white/50 mt-0.5">hrubý zisk celkem</p>
               </div>
               <div className="bg-white p-5 rounded-[2rem] border border-gray-100 shadow-sm">
                 <p className="text-[9px] font-black text-brand-cyan uppercase tracking-widest mb-1">Roční vesting splátky</p>
                 <p className="text-2xl font-black text-gray-900">{fmt(totalAnnualVesting)}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">CZK / rok</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">ročně</p>
               </div>
               <div className="bg-white p-5 rounded-[2rem] border border-gray-100 shadow-sm">
                 <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Bonus – cíl</p>
                 <p className="text-2xl font-black text-gray-900">{fmt(totalBonusBudget)}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">CZK cílový</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">cílová výše</p>
               </div>
               <div className={`p-5 rounded-[2rem] border shadow-sm ${totalBonusCalculated >= totalBonusBudget * 0.9 ? "bg-brand-green/5 border-brand-green/20" : "bg-white border-gray-100"}`}>
                 <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Bonus – vypočtený</p>

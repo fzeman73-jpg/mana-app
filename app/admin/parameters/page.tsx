@@ -13,7 +13,7 @@ import {
 import Image from "next/image"
 import { redirect } from "next/navigation"
 
-const fmt  = (n: number) => Intl.NumberFormat('cs-CZ').format(Math.round(n))
+const fmt  = (n: number) => Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', maximumFractionDigits: 0 }).format(Math.round(n))
 const pct  = (n: number) => `${n}%`
 
 export default async function ParametersPage({
@@ -419,7 +419,7 @@ export default async function ParametersPage({
                   <button type="submit" className={btnCyan + " w-full"}>Uložit</button>
                   {vestingBase && (
                     <p className="text-[10px] text-gray-400 mt-2 text-center">
-                      Základ: {fmt(vestingBase.currentEbitda * vestingBase.baseMultiplier)} CZK
+                      Základ: {fmt(vestingBase.currentEbitda * vestingBase.baseMultiplier)}
                     </p>
                   )}
                 </div>
