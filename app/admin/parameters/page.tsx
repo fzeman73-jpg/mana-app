@@ -288,11 +288,13 @@ export default async function ParametersPage({
                                       <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Skutečnost</p>
                                       <input name="actual" type="number" defaultValue={r?.actual ?? 0} step="any"
                                         className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-bold text-gray-900 outline-none focus:border-brand-cyan" />
+                                      {(r?.actual ?? 0) > 0 && <p className="text-[9px] text-gray-400 mt-0.5">{fmt(r!.actual)}</p>}
                                     </div>
                                     <div>
                                       <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Cíl</p>
                                       <input name="target" type="number" defaultValue={r?.target ?? 0} step="any"
                                         className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-bold text-gray-900 outline-none focus:border-brand-cyan" />
+                                      {(r?.target ?? 0) > 0 && <p className="text-[9px] text-gray-400 mt-0.5">{fmt(r!.target)}</p>}
                                     </div>
                                     <input name="note" placeholder="Poznámka" defaultValue={r?.note ?? ""}
                                       className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-[10px] text-gray-600 outline-none focus:border-brand-cyan" />
@@ -525,8 +527,16 @@ export default async function ParametersPage({
                     <form action={adminSetCompensation.bind(null, selU.id, sel.id)} className="space-y-5">
 
                       <div className="grid grid-cols-2 gap-4">
-                        <div><Label>Základní plat / měs. (CZK)</Label><input name="baseSalary" type="number" defaultValue={compensation?.baseSalary ?? 0} className={inputCls} /></div>
-                        <div><Label>Roční cílový bonus (CZK)</Label><input name="targetBonusAnnual" type="number" defaultValue={compensation?.targetBonusAnnual ?? 0} className={inputCls} /></div>
+                        <div>
+                          <Label>Základní plat / měs. (CZK)</Label>
+                          <input name="baseSalary" type="number" defaultValue={compensation?.baseSalary ?? 0} className={inputCls} />
+                          {(compensation?.baseSalary ?? 0) > 0 && <p className="text-[9px] text-gray-400 mt-1">{fmt(compensation!.baseSalary)}</p>}
+                        </div>
+                        <div>
+                          <Label>Roční cílový bonus (CZK)</Label>
+                          <input name="targetBonusAnnual" type="number" defaultValue={compensation?.targetBonusAnnual ?? 0} className={inputCls} />
+                          {(compensation?.targetBonusAnnual ?? 0) > 0 && <p className="text-[9px] text-gray-400 mt-1">{fmt(compensation!.targetBonusAnnual)}</p>}
+                        </div>
                         <div>
                           <Label>KPI váha (% z bonusu)</Label>
                           <input name="kpiWeight" type="number" step="0.1" min="0" max="100"
@@ -687,8 +697,11 @@ export default async function ParametersPage({
                                     <span className="text-[10px] text-gray-400">Cíl: <span className="font-black text-gray-700">{fmt(t.targetAmount ?? 0)}</span></span>
                                     <span className="text-gray-300">|</span>
                                     <span className="text-[10px] text-gray-400">Skutečnost:</span>
-                                    <input name="actualAmount" type="number" min="0" step="1" defaultValue={t.actualAmount ?? 0}
-                                      className="w-28 bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm font-bold text-gray-900 outline-none focus:border-brand-cyan" />
+                                    <div className="flex flex-col gap-0">
+                                      <input name="actualAmount" type="number" min="0" step="1" defaultValue={t.actualAmount ?? 0}
+                                        className="w-28 bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm font-bold text-gray-900 outline-none focus:border-brand-cyan" />
+                                      {(t.actualAmount ?? 0) > 0 && <p className="text-[9px] text-gray-400 mt-0.5 ml-1">{fmt(t.actualAmount!)}</p>}
+                                    </div>
                                     <button type="submit" className="text-[9px] font-black px-3 py-1.5 rounded-xl border border-brand-cyan/30 text-brand-cyan hover:bg-brand-cyan/10 transition-all">Uložit</button>
                                   </form>
                                 )}

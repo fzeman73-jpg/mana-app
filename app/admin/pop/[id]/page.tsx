@@ -114,6 +114,7 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
                   name="grantEbitda" type="number" step="0.01" defaultValue={plan.grantEbitda} required
                   className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
                 />
+                {plan.grantEbitda > 0 && <p className="text-[10px] text-gray-400 mt-1 ml-1">{fmt(plan.grantEbitda)}</p>}
               </div>
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Základní multiplikátor</label>

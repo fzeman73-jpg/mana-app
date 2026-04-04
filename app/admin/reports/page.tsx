@@ -376,13 +376,16 @@ export default async function ReportsPage({
                                 </div>
                               ) : (
                                 <form action={markVestingPaid.bind(null, comp.id, v.index)} className="flex items-center gap-2">
-                                  <input
-                                    name="amount"
-                                    type="number"
-                                    step="1"
-                                    placeholder={`${Math.round(v.amount)}`}
-                                    className="w-28 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-bold text-gray-900 outline-none focus:border-brand-cyan"
-                                  />
+                                  <div className="flex flex-col gap-0">
+                                    <input
+                                      name="amount"
+                                      type="number"
+                                      step="1"
+                                      placeholder={`${Math.round(v.amount)}`}
+                                      className="w-28 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-bold text-gray-900 outline-none focus:border-brand-cyan"
+                                    />
+                                    <p className="text-[9px] text-gray-400 mt-0.5 ml-1">{fmt(v.amount)}</p>
+                                  </div>
                                   <button
                                     type="submit"
                                     className="text-[9px] font-black px-3 py-1.5 rounded-xl border border-brand-green/30 text-brand-green hover:bg-brand-green hover:text-white transition-all uppercase tracking-wider"
