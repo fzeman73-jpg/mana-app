@@ -57,7 +57,7 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
 
   // Users not yet assigned for the add-assignment form
   const allUsers = await prisma.user.findMany({
-    where:   { isAllowed: true, role: { in: ["ADMIN", "MANAGER"] } },
+    where:   { isAllowed: true },
     orderBy: { name: "asc" },
     select:  { id: true, name: true, email: true },
   })
