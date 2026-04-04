@@ -763,6 +763,7 @@ export async function upsertPopAssignment(planId: string, formData: FormData) {
   })
   await audit(caller.email!, "UPSERT_POP_ASSIGNMENT", `PopPlan:${planId}`, undefined, { userId, ...data })
   revalidatePath("/admin/pop/" + planId)
+  revalidatePath("/admin/parameters")
   revalidatePath("/")
 }
 
@@ -771,6 +772,7 @@ export async function deletePopAssignment(assignmentId: string, planId: string) 
   await audit(caller.email!, "DELETE_POP_ASSIGNMENT", `PopAssignment:${assignmentId}`)
   await popPrisma().popAssignment.delete({ where: { id: assignmentId } })
   revalidatePath("/admin/pop/" + planId)
+  revalidatePath("/admin/parameters")
   revalidatePath("/")
 }
 

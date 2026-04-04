@@ -6,7 +6,7 @@ import {
   upsertQuarterlyResult, lockQuarter, unlockQuarter,
   adminSetCompensation, adminAddKpiTask, adminDeleteKpiTask, adminToggleKpiTask, updateKpiTaskCompletion,
   setParameterWeight, resetParameterWeight,
-  adminAddPhantomGrant, adminUpdatePhantomGrant, adminDeletePhantomGrant,
+  upsertPopAssignment, deletePopAssignment,
   closeQuarter, reopenQuarter,
 } from "@/lib/actions"
 import Image from "next/image"
@@ -50,20 +50,25 @@ export default async function ParametersPage({
       .quarterlySnapshot.findMany({ where: { periodId: sel.id }, select: { quarter: true, year: true } }),
   ]) : [[], []]
 
+  // PopPlány (vždy)
+  type PopPlanRow = { id: string; name: string; grantEbitda: number; baseMultiplier: number; vestingGranularity: string; vestingYears: number }
+  type PopAssignmentRow = { id: string; popPlanId: string; sharePercent: number; grantDate: Date; popPlan: PopPlanRow }
+  const allPopPlans = await (prisma as unknown as { popPlan: { findMany: (a: object) => Promise<PopPlanRow[]> } })
+    .popPlan.findMany({ orderBy: { name: "asc" } })
+
   // Data pro vybraného uživatele + období
-  type PhantomGrantRow = { id: string; name: string; sharePercent: number; grantEbitda: number; grantMultiplier: number; grantDate: Date; vestingYears: number; vestingPercent: number; isActive: boolean }
-  const [compensation, kpiTasks, allCompensations, weightOverrides, phantomGrants] = (sel && selU) ? await Promise.all([
+  const [compensation, kpiTasks, allCompensations, weightOverrides, popAssignments] = (sel && selU) ? await Promise.all([
     prisma.compensation.findUnique({ where: { userId_periodId: { userId: selU.id, periodId: sel.id } } }),
     prisma.kpiTask.findMany({ where: { userId: selU.id, periodId: sel.id }, orderBy: { name: "asc" } }),
     prisma.compensation.findMany({ where: { periodId: sel.id }, select: { userId: true } }),
     (prisma as unknown as { parameterWeight: { findMany: (a: object) => Promise<{ parameterId: string; weight: number }[]> } })
       .parameterWeight.findMany({ where: { userId: selU.id } }),
-    (prisma as unknown as { phantomGrant: { findMany: (a: object) => Promise<PhantomGrantRow[]> } })
-      .phantomGrant.findMany({ where: { userId: selU.id }, orderBy: { grantDate: "asc" } }),
+    (prisma as unknown as { popAssignment: { findMany: (a: object) => Promise<PopAssignmentRow[]> } })
+      .popAssignment.findMany({ where: { userId: selU.id }, include: { popPlan: true }, orderBy: { grantDate: "asc" } }),
   ]) : [null, [], sel ? await prisma.compensation.findMany({ where: { periodId: sel.id }, select: { userId: true } }) : [], [], []]
 
-  const weightMap    = new Map((weightOverrides as { parameterId: string; weight: number }[]).map(r => [r.parameterId, r.weight]))
-  const phantomList  = phantomGrants as PhantomGrantRow[]
+  const weightMap      = new Map((weightOverrides as { parameterId: string; weight: number }[]).map(r => [r.parameterId, r.weight]))
+  const assignmentList = popAssignments as PopAssignmentRow[]
 
   const now   = new Date()
   const curQ  = Math.ceil((now.getMonth() + 1) / 3)
@@ -699,98 +704,79 @@ export default async function ParametersPage({
                     })()}
                   </section>
 
-                  {/* PHANTOM OPTION GRANTY */}
+                  {/* POP PŘIŘAZENÍ */}
                   <section className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
                     <details>
                       <summary className="cursor-pointer px-6 py-4 flex items-center justify-between list-none select-none hover:bg-gray-50 transition-colors">
                         <div className="flex items-center gap-3">
-                          <span className="text-[11px] font-black text-brand-pink uppercase tracking-[0.3em] italic">Phantom Option Granty</span>
-                          {phantomList.length > 0 && (
-                            <span className="text-[9px] font-black bg-brand-pink/10 text-brand-pink px-2 py-0.5 rounded-full">{phantomList.length} grant{phantomList.length > 1 ? "y" : ""}</span>
+                          <span className="text-[11px] font-black text-brand-pink uppercase tracking-[0.3em] italic">POP Přiřazení</span>
+                          {assignmentList.length > 0 && (
+                            <span className="text-[9px] font-black bg-brand-pink/10 text-brand-pink px-2 py-0.5 rounded-full">{assignmentList.length} plán{assignmentList.length > 1 ? "y" : ""}</span>
                           )}
                         </div>
                         <span className="text-gray-300 text-xs">▼</span>
                       </summary>
 
                       <div className="px-6 pb-6 pt-2 space-y-4 border-t border-gray-100">
-                        <p className="text-[11px] text-gray-400">Každý grant je samostatný POP s vlastním názvem, podílem a vestingem. Manažer může mít více grantů z různých let.</p>
+                        <p className="text-[11px] text-gray-400">Vyberte existující POP plán a nastavte podíl manažera. Ostatní parametry (EBITDA, multiplikátor, vesting) jsou řízeny z nastavení plánu.</p>
 
-
-                        {/* Existující granty */}
-                        {phantomList.map(g => (
-                          <div key={g.id} className="border border-gray-200 rounded-2xl overflow-hidden">
+                        {/* Existující přiřazení */}
+                        {assignmentList.map(a => (
+                          <div key={a.id} className="border border-gray-200 rounded-2xl overflow-hidden">
                             <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
-                              <span className="font-black text-sm text-gray-900">{g.name}</span>
-                              <div className="flex items-center gap-2">
-                                <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${g.isActive ? "bg-brand-green/10 text-brand-green" : "bg-gray-100 text-gray-400"}`}>
-                                  {g.isActive ? "Aktivní" : "Neaktivní"}
-                                </span>
-                                <form action={adminDeletePhantomGrant.bind(null, g.id)}>
-                                  <button className="text-gray-300 hover:text-brand-pink transition-colors p-1">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                                  </button>
-                                </form>
+                              <div>
+                                <span className="font-black text-sm text-gray-900">{a.popPlan.name}</span>
+                                <span className="ml-2 text-[9px] text-gray-400">{new Date(a.grantDate).toLocaleDateString("cs-CZ")}</span>
                               </div>
+                              <form action={deletePopAssignment.bind(null, a.id, a.popPlanId)}>
+                                <button className="text-gray-300 hover:text-brand-pink transition-colors p-1">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                </button>
+                              </form>
                             </div>
-                            <form action={adminUpdatePhantomGrant.bind(null, g.id)} className="p-4 grid grid-cols-2 gap-3">
-                              <div className="col-span-2"><Label>Název grantu</Label>
-                                <input name="name" defaultValue={g.name} required className={inputCls} />
-                              </div>
+                            <form action={upsertPopAssignment.bind(null, a.popPlanId)} className="p-4 grid grid-cols-3 gap-3 items-end">
+                              <input type="hidden" name="userId" value={selU.id} />
                               <div><Label>Podíl (%)</Label>
-                                <input name="sharePercent" type="number" step="0.01" defaultValue={g.sharePercent} className={inputCls} />
-                              </div>
-                              <div><Label>EBITDA při vstupu (CZK)</Label>
-                                <input name="grantEbitda" type="number" defaultValue={g.grantEbitda} className={inputCls} />
-                              </div>
-                              <div><Label>Multiplier při vstupu</Label>
-                                <input name="grantMultiplier" type="number" step="0.1" defaultValue={g.grantMultiplier} className={inputCls} />
+                                <input name="sharePercent" type="number" step="0.01" defaultValue={a.sharePercent} className={inputCls} />
                               </div>
                               <div><Label>Datum grantu</Label>
-                                <input name="grantDate" type="date" defaultValue={new Date(g.grantDate).toISOString().split('T')[0]} className={inputCls} />
+                                <input name="grantDate" type="date" defaultValue={new Date(a.grantDate).toISOString().split('T')[0]} className={inputCls} />
                               </div>
-                              <div><Label>Délka vestingu (roky)</Label>
-                                <input name="vestingYears" type="number" defaultValue={g.vestingYears} className={inputCls} />
-                              </div>
-                              <div><Label>Výplata ročně (%)</Label>
-                                <input name="vestingPercent" type="number" step="0.1" defaultValue={g.vestingPercent} className={inputCls} />
-                              </div>
-                              <div className="col-span-2">
-                                <button type="submit" className={btnCyan + " w-full"}>Uložit grant</button>
-                              </div>
+                              <button type="submit" className={btnCyan}>Uložit</button>
                             </form>
                           </div>
                         ))}
 
-                        {/* Přidat nový grant */}
-                        <details className="group">
-                          <summary className="cursor-pointer text-[10px] font-black text-brand-pink uppercase tracking-widest hover:underline list-none">+ Přidat nový grant</summary>
-                          <form action={adminAddPhantomGrant.bind(null, selU.id)} className="mt-3 grid grid-cols-2 gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-200">
-                            <div className="col-span-2"><Label>Název grantu</Label>
-                              <input name="name" placeholder="např. POP 2025" required className={inputCls} />
+                        {/* Přidat přiřazení */}
+                        {allPopPlans.length > 0 && (
+                          <details className="group">
+                            <summary className="cursor-pointer text-[10px] font-black text-brand-pink uppercase tracking-widest hover:underline list-none">+ Přiřadit POP plán</summary>
+                            <div className="mt-3 space-y-3 p-4 bg-gray-50 rounded-2xl border border-gray-200">
+                              {allPopPlans
+                                .filter(p => !assignmentList.some(a => a.popPlanId === p.id))
+                                .map(p => (
+                                  <form key={p.id} action={upsertPopAssignment.bind(null, p.id)} className="grid grid-cols-3 gap-3 items-end border border-gray-200 rounded-xl p-3 bg-white">
+                                    <input type="hidden" name="userId" value={selU.id} />
+                                    <div className="col-span-3">
+                                      <p className="font-black text-sm text-gray-900">{p.name}</p>
+                                      <p className="text-[9px] text-gray-400">EBITDA {fmt(p.grantEbitda)} · koef. {p.baseMultiplier}× · {p.vestingGranularity === "YEARLY" ? `${p.vestingYears} roků` : "kvartálně"}</p>
+                                    </div>
+                                    <div><Label>Podíl (%)</Label>
+                                      <input name="sharePercent" type="number" step="0.01" placeholder="0.5" required className={inputCls} />
+                                    </div>
+                                    <div><Label>Datum grantu</Label>
+                                      <input name="grantDate" type="date" defaultValue={new Date().toISOString().split('T')[0]} className={inputCls} />
+                                    </div>
+                                    <button type="submit" className={btnCyan}>Přiřadit</button>
+                                  </form>
+                                ))
+                              }
                             </div>
-                            <div><Label>Podíl (%)</Label>
-                              <input name="sharePercent" type="number" step="0.01" placeholder="0.5" className={inputCls} />
-                            </div>
-                            <div><Label>EBITDA při vstupu (CZK)</Label>
-                              <input name="grantEbitda" type="number" placeholder="35000000" className={inputCls} />
-                            </div>
-                            <div><Label>Multiplier při vstupu</Label>
-                              <input name="grantMultiplier" type="number" step="0.1" placeholder="8" className={inputCls} />
-                            </div>
-                            <div><Label>Datum grantu</Label>
-                              <input name="grantDate" type="date" defaultValue={new Date().toISOString().split('T')[0]} className={inputCls} />
-                            </div>
-                            <div><Label>Délka vestingu (roky)</Label>
-                              <input name="vestingYears" type="number" defaultValue={4} className={inputCls} />
-                            </div>
-                            <div><Label>Výplata ročně (%)</Label>
-                              <input name="vestingPercent" type="number" step="0.1" defaultValue={25} className={inputCls} />
-                            </div>
-                            <div className="col-span-2">
-                              <button type="submit" className={btnCyan + " w-full"}>Přidat grant</button>
-                            </div>
-                          </form>
-                        </details>
+                          </details>
+                        )}
+                        {allPopPlans.length === 0 && (
+                          <p className="text-[11px] text-gray-400 text-center py-4">Nejsou žádné POP plány. Vytvořte je v sekci <a href="/admin/pop" className="text-brand-cyan underline">POP Plány</a>.</p>
+                        )}
                       </div>
                     </details>
                   </section>
