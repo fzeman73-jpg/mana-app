@@ -24,28 +24,28 @@ export default async function Home({
           <div className="flex justify-center mb-10 mt-4">
             <Image src="/algotech-logo.png" alt="Algotech Logo" width={280} height={84} priority className="opacity-90" />
           </div>
-          <h1 className="text-3xl font-black mb-2 tracking-tighter italic uppercase text-gray-900">
+          <h1 className="text-4xl font-black mb-2 tracking-tighter italic uppercase text-gray-900">
             Performance <span className="text-brand-cyan">Cockpit</span>
           </h1>
-          <p className="text-gray-400 mb-10 font-medium italic tracking-wide text-sm underline decoration-brand-cyan/40 underline-offset-8">
+          <p className="text-gray-400 mb-10 font-medium italic tracking-wide text-base underline decoration-brand-cyan/40 underline-offset-8">
             Sledování výkonnostních pobídek
           </p>
           <form action={loginWithCredentials} className="space-y-3 mb-6">
             <input name="email" type="email" placeholder="Email" required
-              className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900" />
+              className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 font-bold text-base outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900" />
             <input name="password" type="password" placeholder="Heslo" required
-              className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900" />
-            <button type="submit" className="w-full bg-brand-navy text-white font-black py-4 px-8 rounded-2xl hover:bg-brand-cyan hover:text-brand-navy transition-all shadow-sm active:scale-95 uppercase tracking-[0.2em] text-xs">
+              className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 font-bold text-base outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900" />
+            <button type="submit" className="w-full bg-brand-navy text-white font-black py-4 px-8 rounded-2xl hover:bg-brand-cyan hover:text-brand-navy transition-all shadow-sm active:scale-95 uppercase tracking-[0.2em] text-sm">
               Přihlásit se
             </button>
           </form>
           <div className="flex items-center gap-3 mb-6">
             <div className="flex-1 h-px bg-gray-200" />
-            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">nebo</span>
+            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">nebo</span>
             <div className="flex-1 h-px bg-gray-200" />
           </div>
           <form action={async () => { "use server"; await signIn("google") }}>
-            <button className="w-full bg-brand-cyan text-brand-navy font-black py-4 px-8 rounded-2xl hover:bg-brand-pink hover:text-white transition-all shadow-sm active:scale-95 uppercase tracking-[0.2em] text-xs">
+            <button className="w-full bg-brand-cyan text-brand-navy font-black py-4 px-8 rounded-2xl hover:bg-brand-pink hover:text-white transition-all shadow-sm active:scale-95 uppercase tracking-[0.2em] text-sm">
               Vstoupit přes Google
             </button>
           </form>
@@ -64,14 +64,12 @@ export default async function Home({
 
   const { q, y, periodId: pidParam } = await searchParams
 
-  // Všechna období (pro selector) + vybrané
   const allPeriods = await prisma.period.findMany({ orderBy: { startDate: "desc" } })
   const period = pidParam
     ? (allPeriods.find(p => p.id === pidParam) ?? allPeriods.find(p => p.isActive) ?? null)
     : (allPeriods.find(p => p.isActive) ?? null)
 
-  // Data pro vybrané období
-  const [compensation, kpiTasks, perfParams, vestingBase, boosters, snapshots] = period
+  const [compensation, kpiTasks, perfParams, snapshots] = period
     ? await Promise.all([
         prisma.compensation.findUnique({ where: { userId_periodId: { userId: dbUser.id, periodId: period.id } } }),
         prisma.kpiTask.findMany({ where: { userId: dbUser.id, periodId: period.id }, orderBy: { name: "asc" } }),
@@ -89,20 +87,17 @@ export default async function Home({
           include: { results: { orderBy: [{ year: "asc" }, { quarter: "asc" }] } },
           orderBy: { sortOrder: "asc" },
         }),
-        prisma.vestingBase.findUnique({ where: { periodId: period.id } }),
-        prisma.strategicBooster.findMany({ where: { periodId: period.id }, orderBy: { name: "asc" } }),
         prisma.quarterlySnapshot.findMany({
           where: { userId: dbUser.id, periodId: period.id },
           orderBy: [{ year: "asc" }, { quarter: "asc" }],
-          take: 12,
         }),
       ])
-    : [null, [], [], null, [], []]
+    : [null, [], [], []]
 
   type PerfParamFull = { id: string; name: string; weight: number; threshold: number; sortOrder: number; gatesParamId: string | null; results: { year: number; quarter: number; actual: number; target: number }[] }
   const perfParamsTyped = perfParams as unknown as PerfParamFull[]
 
-  // PopAssignments – nová architektura POP
+  // PopAssignments
   type PopAssignmentFull = {
     id: string; sharePercent: number; grantDate: Date; grantEbitda: number
     payments: { vestingYear: number; isPaid: boolean; paidAt: Date | null; amount: number | null }[]
@@ -128,36 +123,29 @@ export default async function Home({
   const curQ = q ? parseInt(q) : nowQ
   const curY = y ? parseInt(y) : nowY
 
-  // Dostupné roky z výsledků
-  const availableYears: number[] = Array.from(new Set(perfParamsTyped.flatMap((p: PerfParamFull) => p.results.map((r: PerfParamFull["results"][number]) => r.year)))).sort()
+  const availableYears: number[] = Array.from(new Set(perfParamsTyped.flatMap(p => p.results.map(r => r.year)))).sort()
   if (!availableYears.includes(nowY)) availableYears.push(nowY)
 
-  // ── VÝPOČTY ───────────────────────────────────────────────────────────────
-
-  // Přepsání vah parametrů per manažer
+  // Přepsání vah
   const weightOverrides = period ? await (prisma as unknown as {
     parameterWeight: { findMany: (a: object) => Promise<{ parameterId: string; weight: number }[]> }
   }).parameterWeight.findMany({ where: { userId: dbUser.id } }) : []
-  const weightMap = new Map(weightOverrides.map((r: { parameterId: string; weight: number }) => [r.parameterId, r.weight]))
+  const weightMap = new Map(weightOverrides.map(r => [r.parameterId, r.weight]))
 
-  // Bonus z výkonnostních parametrů
-  const paramInputs = perfParamsTyped.map((p: PerfParamFull) => {
+  // ── Výpočet bonusu pro vybraný kvartál ────────────────────────────────────
+  const paramInputs = perfParamsTyped.map(p => {
     const res = p.results.find(r => r.quarter === curQ && r.year === curY)
     return {
-      id:           p.id,
-      name:         p.name,
-      weight:       weightMap.get(p.id) ?? p.weight,
-      threshold:    p.threshold,
-      gatesParamId: p.gatesParamId,
-      actual:       res?.actual ?? 0,
-      target:       res?.target ?? 0,
+      id: p.id, name: p.name,
+      weight: weightMap.get(p.id) ?? p.weight,
+      threshold: p.threshold, gatesParamId: p.gatesParamId,
+      actual: res?.actual ?? 0, target: res?.target ?? 0,
     }
   })
 
-  // Normalizace KPI plnění per typ (0–1)
   type KpiTaskExt = { id: string; name: string; description: string | null; weight: number; isCompleted: boolean; taskType: string; completionPct: number | null; targetAmount: number | null; actualAmount: number | null }
   const kpiTasksExt = kpiTasks as unknown as KpiTaskExt[]
-  const kpiNorm = kpiTasksExt.map((t: KpiTaskExt) => {
+  const kpiNorm = kpiTasksExt.map(t => {
     if (t.taskType === "PERCENT") return Math.min(1, (t.completionPct ?? 0) / 100)
     if (t.taskType === "AMOUNT" && (t.targetAmount ?? 0) > 0) return Math.min(1, (t.actualAmount ?? 0) / t.targetAmount!)
     return t.isCompleted ? 1 : 0
@@ -166,35 +154,61 @@ export default async function Home({
   const bonusBreakdown = calcBonus(
     paramInputs,
     compensation?.targetBonusAnnual ?? 0,
-    kpiTasksExt.map((t: KpiTaskExt, i: number) => ({ weight: t.weight, completionPct: kpiNorm[i] })),
+    kpiTasksExt.map((t, i) => ({ weight: t.weight, completionPct: kpiNorm[i] })),
     compensation?.kpiWeight ?? 0
   )
 
-  // KPI plnění (vážený průměr)
-  const totalKpiW   = kpiTasksExt.reduce((s: number, t: KpiTaskExt) => s + t.weight, 0)
-  const weightedKpi = kpiTasksExt.reduce((s: number, t: KpiTaskExt, i: number) => s + t.weight * kpiNorm[i], 0)
+  const totalKpiW   = kpiTasksExt.reduce((s, t) => s + t.weight, 0)
+  const weightedKpi = kpiTasksExt.reduce((s, t, i) => s + t.weight * kpiNorm[i], 0)
   const kpiAch      = totalKpiW > 0 ? weightedKpi / totalKpiW : 0
 
-  // POP – nová architektura (PopAssignment)
+  // ── Výpočet bonusu pro každý kvartál roku (pro roční přehled) ─────────────
+  const quarterCalcs = [1, 2, 3, 4].map(qn => {
+    const inputs = perfParamsTyped.map(p => {
+      const res = p.results.find(r => r.quarter === qn && r.year === curY)
+      return {
+        id: p.id, name: p.name,
+        weight: weightMap.get(p.id) ?? p.weight,
+        threshold: p.threshold, gatesParamId: p.gatesParamId,
+        actual: res?.actual ?? 0, target: res?.target ?? 0,
+      }
+    })
+    const snap = snapshots.find((s: { quarter: number; year: number }) => s.quarter === qn && s.year === curY)
+    const bonus = calcBonus(
+      inputs,
+      compensation?.targetBonusAnnual ?? 0,
+      kpiTasksExt.map((t, i) => ({ weight: t.weight, completionPct: kpiNorm[i] })),
+      compensation?.kpiWeight ?? 0
+    )
+    const hasData = inputs.some(p => p.actual > 0 || p.target > 0)
+    const achPct  = (compensation?.targetBonusAnnual ?? 0) > 0
+      ? Math.round(bonus.total / (compensation!.targetBonusAnnual / 4) * 100)
+      : 0
+    return { quarter: qn, bonus, snap, hasData, achPct }
+  })
+
+  const yearBonusTotal = quarterCalcs.reduce((s, q) => s + (q.snap ? q.snap.bonusAmount : q.bonus.total), 0)
+
+  // ── POP výpočty ────────────────────────────────────────────────────────────
   const popCalcs = popAssignments.map(a => {
     const latestYear = a.popPlan.yearData.at(-1)
     const effectiveGrantEbitda = a.grantEbitda > 0 ? a.grantEbitda : a.popPlan.grantEbitda
     const pop = latestYear ? calcPOP({
-      sharePercent:    a.sharePercent,
-      grantEbitda:     effectiveGrantEbitda,
+      sharePercent: a.sharePercent,
+      grantEbitda: effectiveGrantEbitda,
       grantMultiplier: a.popPlan.baseMultiplier,
-      currentEbitda:   latestYear.currentEbitda,
-      baseMultiplier:  a.popPlan.baseMultiplier,
-      boosters:        a.popPlan.boosters,
+      currentEbitda: latestYear.currentEbitda,
+      baseMultiplier: a.popPlan.baseMultiplier,
+      boosters: a.popPlan.boosters,
     }) : null
     const schedule = pop ? calcVestingSchedule({
-      grossGain:           pop.grossGain,
-      granularity:         a.popPlan.vestingGranularity as "YEARLY" | "QUARTERLY",
-      vestingYears:        a.popPlan.vestingYears,
-      vestingPaymentDay:   a.popPlan.vestingPaymentDay,
+      grossGain: pop.grossGain,
+      granularity: a.popPlan.vestingGranularity as "YEARLY" | "QUARTERLY",
+      vestingYears: a.popPlan.vestingYears,
+      vestingPaymentDay: a.popPlan.vestingPaymentDay,
       vestingPaymentMonth: a.popPlan.vestingPaymentMonth,
-      vestingQuarters:     a.popPlan.vestingQuarters,
-      grantYear:           new Date(a.grantDate).getFullYear(),
+      vestingQuarters: a.popPlan.vestingQuarters,
+      grantYear: new Date(a.grantDate).getFullYear(),
     }) : []
     return { assignment: a, pop, schedule }
   })
@@ -205,78 +219,73 @@ export default async function Home({
   return (
     <div className="min-h-screen bg-gray-50 font-sans selection:bg-brand-cyan/20">
 
-      {/* NAVBAR */}
+      {/* ── NAVBAR ─────────────────────────────────────────────────────────── */}
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
-        {/* Řádek 1: logo + navigace */}
-        <div className="px-4 sm:px-8 py-3 flex justify-between items-center">
-          <a href="/"><Image src="/algotech-logo.png" alt="Algotech" width={130} height={38} className="object-contain" /></a>
-          <div className="flex items-center gap-2 sm:gap-4">
+        <div className="px-4 sm:px-8 py-4 flex justify-between items-center">
+          <a href="/"><Image src="/algotech-logo.png" alt="Algotech" width={175} height={52} className="object-contain" /></a>
+          <div className="flex items-center gap-3 sm:gap-5">
             {(isAdmin || isManager) && (
-              <a href="/admin/parameters" className="text-gray-400 hover:text-brand-cyan text-[10px] font-black uppercase tracking-widest transition-colors">
+              <a href="/admin/parameters" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors">
                 Parametry
               </a>
             )}
             {isAdmin && (
-              <a href="/admin/reports" className="hidden sm:block text-gray-400 hover:text-brand-cyan text-[10px] font-black uppercase tracking-widest transition-colors">
+              <a href="/admin/reports" className="hidden sm:block text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors">
                 Reporty
               </a>
             )}
             {isAdmin && (
               <>
-                <a href="/admin/pop" className="hidden sm:block text-gray-400 hover:text-brand-cyan text-[10px] font-black uppercase tracking-widest transition-colors">
+                <a href="/admin/pop" className="hidden sm:block text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors">
                   POP
                 </a>
-                <a href="/admin" className="hidden sm:block bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/30 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-cyan hover:text-brand-navy transition-all">
+                <a href="/admin" className="hidden sm:block bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/30 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-brand-cyan hover:text-brand-navy transition-all">
                   Uživatelé
                 </a>
               </>
             )}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               {session.user?.image && (
-                <img src={session.user.image} className="w-8 h-8 rounded-full ring-2 ring-brand-cyan/20 hidden sm:block" referrerPolicy="no-referrer" alt="" />
+                <img src={session.user.image} className="w-9 h-9 rounded-full ring-2 ring-brand-cyan/20 hidden sm:block" referrerPolicy="no-referrer" alt="" />
               )}
               <div className="leading-none text-right hidden sm:block">
-                <p className="text-xs font-black text-gray-900">{session.user?.name}</p>
-                <p className="text-[9px] text-gray-400 uppercase tracking-wider">{dbUser.role === "ADMIN" ? "Admin" : dbUser.role === "MANAGER" ? "Manažer" : "Viewer"}</p>
+                <p className="text-sm font-black text-gray-900">{session.user?.name}</p>
+                <p className="text-xs text-gray-400 uppercase tracking-wider mt-0.5">{dbUser.role === "ADMIN" ? "Admin" : dbUser.role === "MANAGER" ? "Manažer" : "Viewer"}</p>
               </div>
             </div>
-            <a href="/help" className="text-gray-400 hover:text-brand-cyan transition-colors text-[10px] font-black uppercase tracking-widest">
-              Nápověda
-            </a>
-            <a href="/settings" className="text-gray-400 hover:text-brand-cyan transition-colors text-[10px] font-black uppercase tracking-widest">
+            <a href="/settings" className="text-gray-400 hover:text-brand-cyan transition-colors text-xs font-black uppercase tracking-widest">
               Nastavení
             </a>
             <form action={async () => { "use server"; await signOut() }}>
-              <button className="text-gray-400 hover:text-brand-pink transition-colors text-[10px] font-black uppercase tracking-widest">Odhlásit</button>
+              <button className="text-gray-400 hover:text-brand-pink transition-colors text-xs font-black uppercase tracking-widest">Odhlásit</button>
             </form>
           </div>
         </div>
-        {/* Řádek 2: selektor období / roku / kvartálu */}
-        <div className="border-t border-gray-100 px-4 sm:px-8 py-2 overflow-x-auto">
-          <div className="flex items-center gap-1.5 min-w-max">
+        {/* Selektor období / roku / kvartálu */}
+        <div className="border-t border-gray-100 px-4 sm:px-8 py-2.5 overflow-x-auto">
+          <div className="flex items-center gap-2 min-w-max">
             {allPeriods.map(p => (
               <a key={p.id} href={`/?periodId=${p.id}&y=${nowY}&q=${nowQ}`}
-                className={`px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all border whitespace-nowrap ${p.id === period?.id ? "bg-brand-cyan text-brand-navy border-brand-cyan" : "border-gray-200 text-gray-400 hover:border-brand-cyan hover:text-brand-cyan"}`}>
-                {p.name}
-                {p.isActive && <span className="ml-1 opacity-60">●</span>}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all border whitespace-nowrap ${p.id === period?.id ? "bg-brand-cyan text-brand-navy border-brand-cyan" : "border-gray-200 text-gray-400 hover:border-brand-cyan hover:text-brand-cyan"}`}>
+                {p.name}{p.isActive && <span className="ml-1 opacity-60">●</span>}
               </a>
             ))}
             {allPeriods.length === 0 && (
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Žádné aktivní období</span>
+              <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Žádné aktivní období</span>
             )}
             {period && (
               <>
                 <span className="w-px h-4 bg-gray-200 mx-1 flex-shrink-0" />
                 {availableYears.map(yr => (
                   <a key={yr} href={`/?periodId=${period.id}&y=${yr}&q=${yr === curY ? curQ : 1}`}
-                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all whitespace-nowrap ${yr === curY ? "bg-brand-navy text-white" : "text-gray-400 hover:text-brand-navy"}`}>
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all whitespace-nowrap ${yr === curY ? "bg-brand-navy text-white" : "text-gray-400 hover:text-brand-navy"}`}>
                     {yr}
                   </a>
                 ))}
                 <span className="w-px h-4 bg-gray-200 mx-1 flex-shrink-0" />
                 {[1, 2, 3, 4].map(qn => (
                   <a key={qn} href={`/?periodId=${period.id}&y=${curY}&q=${qn}`}
-                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all whitespace-nowrap ${qn === curQ ? "bg-brand-cyan text-brand-navy" : "text-gray-400 hover:text-brand-cyan"}`}>
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all whitespace-nowrap ${qn === curQ ? "bg-brand-cyan text-brand-navy" : "text-gray-400 hover:text-brand-cyan"}`}>
                     Q{qn}
                   </a>
                 ))}
@@ -291,264 +300,202 @@ export default async function Home({
         {noData ? (
           <div className="bg-white rounded-[3rem] border border-gray-100 shadow-sm p-16 text-center">
             <p className="text-5xl mb-4">⚙️</p>
-            <p className="font-black text-gray-400 text-sm uppercase tracking-widest">
+            <p className="font-black text-gray-400 text-base uppercase tracking-widest">
               {!period ? "Není aktivní žádné období." : "Vaše odměna zatím není nastavena."}
             </p>
-            {isAdmin && <a href="/admin/parameters" className="inline-block mt-6 bg-brand-cyan text-brand-navy px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-pink hover:text-white transition-all">Nastavit parametry →</a>}
+            {isAdmin && <a href="/admin/parameters" className="inline-block mt-6 bg-brand-cyan text-brand-navy px-8 py-3 rounded-2xl font-black uppercase text-sm tracking-widest hover:bg-brand-pink hover:text-white transition-all">Nastavit parametry →</a>}
           </div>
         ) : (
           <>
 
-            {/* ── HERO: POP Capital Gain ──────────────────────────────────── */}
-            <section className="bg-brand-navy rounded-[3rem] p-10 relative overflow-hidden shadow-2xl">
-              <div className="absolute -right-20 -top-20 w-96 h-96 bg-brand-pink rounded-full opacity-10 blur-[100px]" />
-              <div className="absolute -left-10 -bottom-10 w-64 h-64 bg-brand-cyan rounded-full opacity-10 blur-[80px]" />
-              <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-2">
-                  <p className="text-[10px] font-black text-brand-pink uppercase tracking-[0.4em]">Phantom Capital Gain</p>
-                  <span className="text-[8px] font-black bg-brand-pink/20 text-brand-pink px-2 py-0.5 rounded-full uppercase tracking-widest border border-brand-pink/30">Průběžná projekce</span>
+            {/* ── BLOK 1: Roční přehled bonusů ─────────────────────────────── */}
+            <section className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm p-8">
+              <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+                <div>
+                  <h2 className="text-base font-black text-gray-900 uppercase tracking-widest">Roční přehled bonusů</h2>
+                  <p className="text-sm text-gray-400 mt-0.5">Cílový bonus: {fmt(compensation?.targetBonusAnnual ?? 0)} / rok</p>
                 </div>
-                <p className="text-7xl md:text-8xl font-black tracking-tighter text-white italic leading-none">
-                  {fmt(totalPopGain)}
-                </p>
-                <p className="text-white/30 text-sm font-bold mt-2">CZK · Brutto · celkem všechny POP plány</p>
-
-                {/* Per-plan breakdown */}
-                {popCalcs.map(({ assignment: a, pop, schedule }) => pop && (
-                  <div key={a.id} className="mt-6 pt-6 border-t border-white/10">
-                    <div className="flex flex-col md:flex-row justify-between items-start gap-6">
-                      <div>
-                        <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.3em] mb-1">{a.popPlan.name}</p>
-                        <p className="text-3xl font-black text-white">{fmt(pop.grossGain)}</p>
-                        <p className="text-white/30 text-xs font-bold mt-1">
-                          Podíl {a.sharePercent}% · Grant {new Date(a.grantDate).getFullYear()}
-                        </p>
-                      </div>
-                      <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-1.5 min-w-[200px]">
-                        <Row label="Hodnota firmy dnes" value={`${fmt(pop.currentFirmValue)}`} light />
-                        <Row label="Hodnota při grantu" value={`${fmt(pop.grantFirmValue)}`} light />
-                        <Row label="Vytvořená hodnota" value={`${fmt(pop.createdValue)}`} accent />
-                        <div className="pt-2 border-t border-white/10">
-                          <Row label="Koeficient" value={`${pop.currentMultiplier.toFixed(1)}×`} light />
-                          <Row label="z toho boostery" value={`+${pop.boosterTotal.toFixed(1)}×`} light />
-                        </div>
-                      </div>
-                    </div>
-                    {/* Boostery */}
-                    {a.popPlan.boosters.length > 0 && (
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {a.popPlan.boosters.map((b, i) => (
-                          <div key={i} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black border ${b.isAchieved ? "bg-brand-green/20 border-brand-green/30 text-brand-green" : "bg-white/5 border-white/10 text-white/30"}`}>
-                            <span>{b.isAchieved ? "✓" : "○"}</span>
-                            <span>+{b.multiplierBoost}×</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {/* Mini vesting strip */}
-                    {schedule.length > 0 && (
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {schedule.map(v => {
-                          const paid = a.payments.find(p => p.vestingYear === v.index)
-                          return (
-                            <div key={v.index} className={`px-3 py-1.5 rounded-xl text-[9px] font-black border ${paid?.isPaid ? "bg-brand-green/20 border-brand-green/30 text-brand-green" : v.isCurrent ? "bg-brand-cyan/20 border-brand-cyan/30 text-brand-cyan" : "bg-white/5 border-white/10 text-white/30"}`}>
-                              {v.label} · {v.payDate} · {fmt(v.amount)}
-                              {paid?.isPaid && " ✓"}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                {popCalcs.length === 0 && (
-                  <p className="text-white/20 text-sm font-bold mt-4">Nejsou přiřazeny žádné POP plány.</p>
-                )}
+                <div className="text-right">
+                  <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Celkem {curY}</p>
+                  <p className="text-3xl font-black text-brand-navy">{fmt(yearBonusTotal)}</p>
+                </div>
               </div>
-            </section>
 
-            {/* ── GRID: Bonus + Vesting + KPI + Smluvní podmínky ──────────── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {quarterCalcs.map(({ quarter: qn, bonus, snap, hasData }) => {
+                  const isCurrent = qn === curQ && curY === nowY
+                  const isSelected = qn === curQ
+                  const isClosed = !!snap
+                  const displayBonus = isClosed ? snap!.bonusAmount : bonus.total
+                  const displayPct   = (compensation?.targetBonusAnnual ?? 0) > 0
+                    ? Math.round(displayBonus / (compensation!.targetBonusAnnual / 4) * 100)
+                    : 0
 
-              {/* LEVÝ SLOUP */}
-              <div className="space-y-6">
-
-                {/* Smluvní podmínky */}
-                <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-                  <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-4">Smluvní podmínky</h2>
-                  <div className="space-y-2">
-                    <InfoRow label="Základní plat" value={`${fmt(compensation?.baseSalary ?? 0)} / měs.`} />
-                    <InfoRow label="Roční cílový bonus" value={`${fmt(compensation?.targetBonusAnnual ?? 0)}`} highlight />
-                    <InfoRow label="Podíl POP" value={`${compensation?.sharePercent}%`} />
-                  </div>
-                </section>
-
-                {/* Vesting schedule – per PopPlan */}
-                {popCalcs.filter(c => c.schedule.length > 0).map(({ assignment: a, pop, schedule }) => {
-                  const nextV = schedule.find(v => !a.payments.find(p => p.vestingYear === v.index && p.isPaid))
                   return (
-                    <section key={a.id} className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-                      <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-1">Vesting POP</h2>
-                      <p className="text-[9px] text-brand-cyan font-black uppercase tracking-widest mb-3">{a.popPlan.name}</p>
-                      {nextV && (
-                        <div className="mb-4 px-4 py-3 bg-brand-navy/5 rounded-2xl border border-brand-navy/10 flex justify-between items-center">
-                          <div>
-                            <p className="text-[9px] font-black text-brand-navy/50 uppercase tracking-widest">Příští splátka — {nextV.label}</p>
-                            <p className="font-black text-brand-navy text-lg">{fmt(nextV.amount)}</p>
-                            <p className="text-[9px] text-brand-navy/40 mt-0.5">{nextV.payDate}</p>
-                          </div>
-                          <span className="text-2xl">📅</span>
-                        </div>
-                      )}
-                      <div className="space-y-2">
-                        {schedule.map(v => {
-                          const paid = a.payments.find(p => p.vestingYear === v.index && p.isPaid)
-                          return (
-                            <div key={v.index} className={`flex justify-between items-center px-3 py-2 rounded-xl ${v.isCurrent ? "bg-brand-cyan/10 border border-brand-cyan/20" : paid ? "bg-brand-green/5 border border-brand-green/20" : "bg-gray-50"}`}>
-                              <div>
-                                <span className={`text-[10px] font-black uppercase tracking-wider ${v.isCurrent ? "text-brand-cyan" : paid ? "text-brand-green" : "text-gray-500"}`}>
-                                  {v.label} {v.isCurrent && "← nyní"} {paid && "✓"}
-                                </span>
-                                <span className="text-[9px] text-gray-400 ml-2">{v.payDate}</span>
-                              </div>
-                              <span className={`font-black text-sm ${v.isCurrent ? "text-brand-cyan" : paid ? "text-brand-green" : "text-gray-700"}`}>
-                                {fmt(v.amount)}
-                              </span>
-                            </div>
-                          )
-                        })}
+                    <a key={qn} href={`/?periodId=${period!.id}&y=${curY}&q=${qn}`}
+                      className={`block rounded-2xl border p-5 transition-all cursor-pointer ${
+                        isSelected
+                          ? "border-brand-cyan ring-2 ring-brand-cyan/20 bg-brand-cyan/5"
+                          : "border-gray-200 hover:border-gray-300"
+                      } ${isClosed ? "bg-gray-50" : ""}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className={`text-sm font-black uppercase tracking-widest ${isSelected ? "text-brand-cyan" : "text-gray-500"}`}>
+                          Q{qn} {curY}
+                        </span>
+                        <span className={`text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                          isClosed ? "bg-gray-200 text-gray-500" :
+                          isCurrent ? "bg-brand-cyan/15 text-brand-cyan" :
+                          "bg-gray-100 text-gray-400"
+                        }`}>
+                          {isClosed ? "Uzavřen" : isCurrent ? "Aktuální" : "Otevřen"}
+                        </span>
                       </div>
-                      <p className="text-[10px] text-gray-400 mt-3 text-right">
-                        Celkem: {fmt(pop?.grossGain ?? 0)}
+                      <p className={`text-2xl font-black ${isClosed ? "text-gray-700" : hasData ? "text-gray-900" : "text-gray-300"}`}>
+                        {hasData || isClosed ? fmt(displayBonus) : "—"}
                       </p>
-                    </section>
+                      {(hasData || isClosed) && (compensation?.targetBonusAnnual ?? 0) > 0 && (
+                        <>
+                          <div className="mt-3 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${isClosed ? "bg-gray-400" : displayPct >= 100 ? "bg-brand-green" : "bg-brand-cyan"}`}
+                              style={{ width: `${Math.min(150, displayPct)}%` }}
+                            />
+                          </div>
+                          <p className={`text-xs font-black mt-1.5 ${isClosed ? "text-gray-400" : displayPct >= 100 ? "text-brand-green" : "text-gray-500"}`}>
+                            {displayPct}% z kvartálního cíle
+                          </p>
+                        </>
+                      )}
+                      {!hasData && !isClosed && (
+                        <p className="text-xs text-gray-300 mt-2">Výsledky nejsou zadány</p>
+                      )}
+                    </a>
                   )
                 })}
               </div>
+            </section>
 
-              {/* PRAVÝ SLOUP */}
-              <div className="lg:col-span-2 space-y-6">
+            {/* ── BLOK 2: Detail kvartálu ───────────────────────────────────── */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-                {/* Výkonnostní parametry – aktuální kvartál */}
-                <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-                  <div className="flex justify-between items-center mb-5">
-                    <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em]">
-                      Bonus – Q{curQ} {curY}
-                    </h2>
-                    <div className="text-right">
-                      <p className="text-[9px] text-gray-400 uppercase tracking-wider">Projekce celkem</p>
-                      <p className="font-black text-xl text-brand-cyan">{fmt(bonusBreakdown.total)}</p>
-                    </div>
+              {/* Výkonnostní parametry */}
+              <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-base font-black text-gray-900 uppercase tracking-widest">
+                    Parametry — Q{curQ} {curY}
+                  </h2>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-400 uppercase tracking-wider">Projekce bonusu</p>
+                    <p className="font-black text-2xl text-brand-cyan">{fmt(bonusBreakdown.total)}</p>
                   </div>
+                </div>
 
-                  <div className="space-y-4">
-                    {paramInputs.map(p => {
-                      const r = bonusBreakdown.parameters.find(r => r.id === p.id)
-                      if (!r) return null
-                      const achPct = Math.round(r.achievement * 100)
-                      const barW   = Math.min(100, achPct)
-                      return (
-                        <div key={p.id} className={`p-4 rounded-2xl border ${!r.thresholdMet ? "bg-brand-pink/5 border-brand-pink/20" : r.gated ? "bg-gray-50 border-gray-200 opacity-60" : "bg-gray-50 border-gray-200"}`}>
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <span className="font-black text-gray-900 text-sm">{p.name}</span>
-                              <div className="flex gap-2 mt-1 flex-wrap">
-                                <span className="text-[9px] font-black bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">váha {p.weight}%</span>
-                                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${!r.thresholdMet ? "bg-brand-pink/20 text-brand-pink" : "bg-gray-100 text-gray-400"}`}>
-                                  bariéra {p.threshold}% {!r.thresholdMet ? "✗ nesplněna" : "✓"}
-                                </span>
-                                {r.gated && <span className="text-[9px] font-black bg-brand-pink/10 text-brand-pink px-2 py-0.5 rounded-full">nulováno (gating)</span>}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-black text-base text-gray-900">{fmt(r.bonusAmount)}</p>
-                              <p className="text-[10px] text-gray-400">{achPct}% plnění</p>
+                <div className="space-y-4">
+                  {paramInputs.map(p => {
+                    const r = bonusBreakdown.parameters.find(r => r.id === p.id)
+                    if (!r) return null
+                    const achPct = Math.round(r.achievement * 100)
+                    return (
+                      <div key={p.id} className={`p-5 rounded-2xl border ${!r.thresholdMet ? "bg-brand-pink/5 border-brand-pink/20" : r.gated ? "bg-gray-50 border-gray-200 opacity-60" : "bg-gray-50 border-gray-200"}`}>
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <span className="font-black text-gray-900 text-base">{p.name}</span>
+                            <div className="flex gap-2 mt-1 flex-wrap">
+                              <span className="text-xs font-black bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">váha {p.weight}%</span>
+                              <span className={`text-xs font-black px-2 py-0.5 rounded-full ${!r.thresholdMet ? "bg-brand-pink/20 text-brand-pink" : "bg-gray-100 text-gray-400"}`}>
+                                bariéra {p.threshold}% {!r.thresholdMet ? "✗" : "✓"}
+                              </span>
+                              {r.gated && <span className="text-xs font-black bg-brand-pink/10 text-brand-pink px-2 py-0.5 rounded-full">nulováno</span>}
                             </div>
                           </div>
-                          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full transition-all ${!r.thresholdMet || r.gated ? "bg-brand-pink/50" : "bg-brand-cyan"}`}
-                              style={{ width: `${barW}%` }} />
+                          <div className="text-right">
+                            <p className="font-black text-lg text-gray-900">{fmt(r.bonusAmount)}</p>
+                            <p className="text-xs text-gray-400">{achPct}% plnění</p>
                           </div>
-                          {p.actual > 0 || p.target > 0 ? (
-                            <div className="flex justify-between mt-1.5">
-                              <span className="text-[9px] text-gray-400">Skutečnost: {fmt(p.actual)}</span>
-                              <span className="text-[9px] text-gray-400">Cíl: {fmt(p.target)}</span>
-                            </div>
-                          ) : (
-                            <p className="text-[9px] text-gray-300 mt-1.5">Výsledky za Q{curQ} zatím nejsou zadány.</p>
-                          )}
                         </div>
-                      )
-                    })}
-                    {paramInputs.length === 0 && (
-                      <p className="text-gray-400 text-sm italic text-center py-4">Parametry nejsou definovány.</p>
-                    )}
-                  </div>
-                </section>
-
-                {/* KPI úkoly */}
-                {kpiTasks.length > 0 && (
-                  <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-                    <div className="flex justify-between items-center mb-5">
-                      <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em]">Individuální KPI</h2>
-                      <div className="text-right">
-                        <p className="text-[9px] text-gray-400 uppercase tracking-wider">Splněno</p>
-                        <p className="font-black text-lg text-brand-green">{pct(kpiAch)}</p>
+                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden mt-3">
+                          <div className={`h-full rounded-full transition-all ${!r.thresholdMet || r.gated ? "bg-brand-pink/50" : "bg-brand-cyan"}`}
+                            style={{ width: `${Math.min(100, achPct)}%` }} />
+                        </div>
+                        {p.actual > 0 || p.target > 0 ? (
+                          <div className="flex justify-between mt-2">
+                            <span className="text-xs text-gray-400">Skutečnost: <span className="font-black text-gray-600">{fmt(p.actual)}</span></span>
+                            <span className="text-xs text-gray-400">Cíl: <span className="font-black text-gray-600">{fmt(p.target)}</span></span>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-300 mt-2">Výsledky za Q{curQ} zatím nejsou zadány.</p>
+                        )}
                       </div>
-                    </div>
+                    )
+                  })}
+                  {paramInputs.length === 0 && (
+                    <p className="text-gray-400 text-sm italic text-center py-6">Parametry nejsou definovány.</p>
+                  )}
+                </div>
+              </section>
 
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-5">
+              {/* KPI úkoly */}
+              <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-base font-black text-gray-900 uppercase tracking-widest">KPI Úkoly</h2>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-400 uppercase tracking-wider">Splněno</p>
+                    <p className="font-black text-2xl text-brand-green">{pct(kpiAch)}</p>
+                  </div>
+                </div>
+
+                {kpiTasks.length === 0 ? (
+                  <p className="text-gray-300 text-sm italic text-center py-10">Žádné KPI úkoly nejsou zadány.</p>
+                ) : (
+                  <>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-6">
                       <div className="h-full bg-brand-green rounded-full transition-all" style={{ width: `${Math.round(kpiAch * 100)}%` }} />
                     </div>
-
-                    <div className="space-y-2">
-                      {kpiTasksExt.map((t: KpiTaskExt, i: number) => {
+                    <div className="space-y-3">
+                      {kpiTasksExt.map((t, i) => {
                         const norm = kpiNorm[i]
                         const pctDisplay = Math.round(norm * 100)
                         const isGreen = norm >= 1
                         return (
-                          <div key={t.id} className={`px-4 py-3 rounded-xl border ${norm > 0 ? "bg-brand-green/5 border-brand-green/20" : "bg-gray-50 border-gray-200"}`}>
+                          <div key={t.id} className={`px-5 py-4 rounded-2xl border ${norm > 0 ? "bg-brand-green/5 border-brand-green/20" : "bg-gray-50 border-gray-200"}`}>
                             <div className="flex items-start gap-3">
-                              <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${isGreen ? "bg-brand-green" : norm > 0 ? "bg-brand-cyan" : "bg-gray-300"}`} />
+                              <div className={`w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0 ${isGreen ? "bg-brand-green" : norm > 0 ? "bg-brand-cyan" : "bg-gray-300"}`} />
                               <div className="flex-1 min-w-0">
-                                <p className={`font-black text-sm ${isGreen ? "text-brand-green italic" : "text-gray-900"}`}>{t.name}</p>
-                                {t.description && <p className="text-[10px] text-gray-400 mt-0.5">{t.description}</p>}
+                                <p className={`font-black text-base ${isGreen ? "text-brand-green italic" : "text-gray-900"}`}>{t.name}</p>
+                                {t.description && <p className="text-xs text-gray-400 mt-0.5">{t.description}</p>}
                               </div>
-                              <span className="text-[9px] font-black text-brand-cyan bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200 flex-shrink-0">{t.weight}%</span>
-                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full flex-shrink-0 ${isGreen ? "bg-brand-green/20 text-brand-green" : norm > 0 ? "bg-brand-cyan/10 text-brand-cyan" : "bg-gray-100 text-gray-400"}`}>
+                              <span className="text-xs font-black text-brand-cyan bg-gray-100 px-2 py-1 rounded-full border border-gray-200 flex-shrink-0">{t.weight}%</span>
+                              <span className={`text-xs font-black px-2 py-1 rounded-full flex-shrink-0 ${isGreen ? "bg-brand-green/20 text-brand-green" : norm > 0 ? "bg-brand-cyan/10 text-brand-cyan" : "bg-gray-100 text-gray-400"}`}>
                                 {pctDisplay}%
                               </span>
                             </div>
-
-                            {/* Ovládací prvek per typ */}
                             {canEdit && t.taskType === "BOOLEAN" && (
-                              <form action={adminToggleKpiTask.bind(null, t.id, t.isCompleted)} className="mt-2">
-                                <button className={`text-[9px] font-black px-3 py-1.5 rounded-xl border transition-all ${t.isCompleted ? "border-brand-green/30 text-brand-green hover:bg-brand-green/10" : "border-gray-200 text-gray-400 hover:border-brand-cyan hover:text-brand-cyan"}`}>
+                              <form action={adminToggleKpiTask.bind(null, t.id, t.isCompleted)} className="mt-3">
+                                <button className={`text-xs font-black px-4 py-2 rounded-xl border transition-all ${t.isCompleted ? "border-brand-green/30 text-brand-green hover:bg-brand-green/10" : "border-gray-200 text-gray-400 hover:border-brand-cyan hover:text-brand-cyan"}`}>
                                   {t.isCompleted ? "✓ Splněno" : "Označit jako splněno"}
                                 </button>
                               </form>
                             )}
                             {canEdit && t.taskType === "PERCENT" && (
-                              <form action={updateKpiTaskCompletion.bind(null, t.id)} className="mt-2 flex items-center gap-2">
+                              <form action={updateKpiTaskCompletion.bind(null, t.id)} className="mt-3 flex items-center gap-2">
                                 <input type="hidden" name="taskType" value="PERCENT" />
                                 <input name="completionPct" type="number" min="0" max="100" step="1"
                                   defaultValue={t.completionPct ?? 0}
-                                  className="w-20 bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm font-bold text-gray-900 outline-none focus:border-brand-cyan" />
-                                <span className="text-[10px] text-gray-400 font-bold">%</span>
-                                <button type="submit" className="text-[9px] font-black px-3 py-1.5 rounded-xl border border-brand-cyan/30 text-brand-cyan hover:bg-brand-cyan/10 transition-all">Uložit</button>
+                                  className="w-20 bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold text-gray-900 outline-none focus:border-brand-cyan" />
+                                <span className="text-sm text-gray-400 font-bold">%</span>
+                                <button type="submit" className="text-xs font-black px-3 py-1.5 rounded-xl border border-brand-cyan/30 text-brand-cyan hover:bg-brand-cyan/10 transition-all">Uložit</button>
                               </form>
                             )}
                             {canEdit && t.taskType === "AMOUNT" && (
-                              <form action={updateKpiTaskCompletion.bind(null, t.id)} className="mt-2 flex items-center gap-2 flex-wrap">
+                              <form action={updateKpiTaskCompletion.bind(null, t.id)} className="mt-3 flex items-center gap-2 flex-wrap">
                                 <input type="hidden" name="taskType" value="AMOUNT" />
-                                <span className="text-[10px] text-gray-400">Cíl: <span className="font-black text-gray-700">{fmt(t.targetAmount ?? 0)}</span></span>
+                                <span className="text-sm text-gray-400">Cíl: <span className="font-black text-gray-700">{fmt(t.targetAmount ?? 0)}</span></span>
                                 <span className="text-gray-300">|</span>
-                                <span className="text-[10px] text-gray-400">Skutečnost:</span>
+                                <span className="text-sm text-gray-400">Skutečnost:</span>
                                 <input name="actualAmount" type="number" min="0" step="1"
                                   defaultValue={t.actualAmount ?? 0}
-                                  className="w-28 bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm font-bold text-gray-900 outline-none focus:border-brand-cyan" />
-                                <button type="submit" className="text-[9px] font-black px-3 py-1.5 rounded-xl border border-brand-cyan/30 text-brand-cyan hover:bg-brand-cyan/10 transition-all">Uložit</button>
+                                  className="w-28 bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold text-gray-900 outline-none focus:border-brand-cyan" />
+                                <button type="submit" className="text-xs font-black px-3 py-1.5 rounded-xl border border-brand-cyan/30 text-brand-cyan hover:bg-brand-cyan/10 transition-all">Uložit</button>
                               </form>
                             )}
                             {!canEdit && t.taskType !== "BOOLEAN" && (
@@ -560,29 +507,99 @@ export default async function Home({
                         )
                       })}
                     </div>
-                  </section>
+                  </>
                 )}
+              </section>
+            </div>
 
-                {/* Historie snapshots */}
-                {snapshots.length > 0 && (
-                  <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-                    <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-5">Historie odměn</h2>
-                    <div className="space-y-2">
-                      {snapshots.map(s => (
-                        <div key={s.id} className="flex justify-between items-center px-4 py-3 bg-gray-50 rounded-xl border border-gray-200">
-                          <span className="text-sm font-black text-gray-700">Q{s.quarter} {s.year}</span>
-                          <div className="text-right">
-                            <p className="font-black text-gray-900 text-sm">{fmt(s.bonusAmount)} <span className="text-gray-400 font-normal text-xs">bonus</span></p>
-                            <p className="text-[10px] text-gray-400">POP: {fmt(s.popValue)}</p>
+            {/* ── BLOK 3: POP (pouze pokud má přiřazen plán) ───────────────── */}
+            {popCalcs.length > 0 && (
+              <section className="bg-brand-navy rounded-[2.5rem] p-10 relative overflow-hidden shadow-2xl">
+                <div className="absolute -right-20 -top-20 w-96 h-96 bg-brand-pink rounded-full opacity-10 blur-[100px]" />
+                <div className="absolute -left-10 -bottom-10 w-64 h-64 bg-brand-cyan rounded-full opacity-10 blur-[80px]" />
+                <div className="relative z-10">
+
+                  {/* Hlavička */}
+                  <div className="flex items-start justify-between mb-8 flex-wrap gap-4">
+                    <div>
+                      <p className="text-sm font-black text-brand-pink uppercase tracking-[0.4em] mb-1">Phantom Option Plan</p>
+                      <p className="text-5xl md:text-6xl font-black tracking-tighter text-white italic leading-none">
+                        {fmt(totalPopGain)}
+                      </p>
+                      <p className="text-white/30 text-sm font-bold mt-2">CZK · Brutto · celkem všechny POP plány</p>
+                    </div>
+                    <span className="text-sm font-black bg-brand-pink/20 text-brand-pink px-4 py-2 rounded-full uppercase tracking-widest border border-brand-pink/30">
+                      Průběžná projekce
+                    </span>
+                  </div>
+
+                  {/* Per-plán */}
+                  {popCalcs.map(({ assignment: a, pop, schedule }) => pop && (
+                    <div key={a.id} className="mt-6 pt-6 border-t border-white/10">
+                      <div className="flex flex-col md:flex-row justify-between items-start gap-6 mb-6">
+                        <div>
+                          <p className="text-xs font-black text-white/40 uppercase tracking-[0.3em] mb-2">{a.popPlan.name} · {a.sharePercent}% podíl · grant {new Date(a.grantDate).getFullYear()}</p>
+                          <p className="text-4xl font-black text-white">{fmt(pop.grossGain)}</p>
+                        </div>
+                        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-2 min-w-[220px]">
+                          <PopRow label="Hodnota firmy dnes" value={fmt(pop.currentFirmValue)} />
+                          <PopRow label="Hodnota při grantu"  value={fmt(pop.grantFirmValue)} />
+                          <PopRow label="Vytvořená hodnota"   value={fmt(pop.createdValue)} accent />
+                          <div className="pt-2 border-t border-white/10">
+                            <PopRow label="Koeficient"        value={`${pop.currentMultiplier.toFixed(1)}×`} />
+                            <PopRow label="z toho boostery"   value={`+${pop.boosterTotal.toFixed(1)}×`} />
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </section>
-                )}
+                      </div>
 
-              </div>
-            </div>
+                      {/* Boostery */}
+                      {a.popPlan.boosters.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-5">
+                          {a.popPlan.boosters.map((b, i) => (
+                            <div key={i} className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-black border ${b.isAchieved ? "bg-brand-green/20 border-brand-green/30 text-brand-green" : "bg-white/5 border-white/10 text-white/30"}`}>
+                              <span>{b.isAchieved ? "✓" : "○"}</span>
+                              <span>+{b.multiplierBoost}×</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Vesting splátky */}
+                      {schedule.length > 0 && (
+                        <div>
+                          <p className="text-xs font-black text-white/30 uppercase tracking-widest mb-3">Vesting splátky</p>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                            {schedule.map(v => {
+                              const paid = a.payments.find(p => p.vestingYear === v.index)
+                              return (
+                                <div key={v.index} className={`px-4 py-3 rounded-2xl border text-sm ${
+                                  paid?.isPaid
+                                    ? "bg-brand-green/20 border-brand-green/30"
+                                    : v.isCurrent
+                                    ? "bg-brand-cyan/20 border-brand-cyan/30"
+                                    : "bg-white/5 border-white/10"
+                                }`}>
+                                  <p className={`font-black text-sm ${paid?.isPaid ? "text-brand-green" : v.isCurrent ? "text-brand-cyan" : "text-white/40"}`}>
+                                    {v.label} {paid?.isPaid && "✓"}
+                                  </p>
+                                  <p className={`font-black text-base mt-1 ${paid?.isPaid ? "text-brand-green" : v.isCurrent ? "text-white" : "text-white/30"}`}>
+                                    {fmt(v.amount)}
+                                  </p>
+                                  <p className={`text-xs mt-0.5 ${paid?.isPaid ? "text-brand-green/70" : v.isCurrent ? "text-brand-cyan/70" : "text-white/20"}`}>
+                                    {v.payDate}
+                                  </p>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
           </>
         )}
       </main>
@@ -592,20 +609,11 @@ export default async function Home({
 
 // ── Sub-komponenty ────────────────────────────────────────────────────────────
 
-function Row({ label, value, light, accent }: { label: string; value: string; light?: boolean; accent?: boolean }) {
+function PopRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <div className="flex justify-between items-center">
-      <span className="text-[10px] font-bold text-white/30 uppercase tracking-wider">{label}</span>
-      <span className={`font-black text-sm ${accent ? "text-brand-pink" : light ? "text-white" : "text-brand-cyan"}`}>{value}</span>
-    </div>
-  )
-}
-
-function InfoRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div className="flex justify-between items-center px-3 py-2.5 bg-gray-50 rounded-xl border border-gray-100">
-      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{label}</span>
-      <span className={`font-black text-sm ${highlight ? "text-brand-cyan" : "text-gray-900"}`}>{value}</span>
+      <span className="text-xs font-bold text-white/30 uppercase tracking-wider">{label}</span>
+      <span className={`font-black text-sm ${accent ? "text-brand-pink" : "text-white"}`}>{value}</span>
     </div>
   )
 }
