@@ -338,19 +338,11 @@ export async function deleteBooster(boosterId: string) {
 
 export async function adminSetCompensation(userId: string, periodId: string, formData: FormData) {
   const caller = await requireAdmin()
-  const grantDateRaw = formData.get("grantDate") as string
-  const grantDate    = grantDateRaw ? new Date(grantDateRaw) : new Date()
 
   const data = {
     baseSalary:        parseFloat(formData.get("baseSalary") as string)        || 0,
     targetBonusAnnual: parseFloat(formData.get("targetBonusAnnual") as string) || 0,
     kpiWeight:         parseFloat(formData.get("kpiWeight") as string)         || 0,
-    sharePercent:      parseFloat(formData.get("sharePercent") as string)      || 0,
-    grantEbitda:       parseFloat(formData.get("grantEbitda") as string)       || 0,
-    grantMultiplier:   parseFloat(formData.get("grantMultiplier") as string)   || 0,
-    vestingYears:      parseInt(formData.get("vestingYears") as string)        || 4,
-    vestingPercent:    parseFloat(formData.get("vestingPercent") as string)    || 25,
-    grantDate,
   }
 
   await prisma.compensation.upsert({
@@ -359,6 +351,66 @@ export async function adminSetCompensation(userId: string, periodId: string, for
     create: { userId, periodId, ...data },
   })
   await audit(caller.email!, "UPDATE_COMPENSATION", `User:${userId}`, undefined, data)
+  revalidatePath("/admin/parameters")
+  revalidatePath("/")
+}
+
+// ─── POZICE UŽIVATELE ─────────────────────────────────────────────────────────
+
+export async function setUserPosition(userId: string, formData: FormData) {
+  const caller   = await requireAdmin()
+  const position = (formData.get("position") as string) || null
+  await prisma.user.update({ where: { id: userId }, data: { position } as object })
+  await audit(caller.email!, "SET_POSITION", `User:${userId}`, undefined, { position })
+  revalidatePath(`/admin/user/${userId}`)
+  revalidatePath("/admin/parameters")
+}
+
+// ─── PHANTOM GRANTY ───────────────────────────────────────────────────────────
+
+export async function adminAddPhantomGrant(userId: string, formData: FormData) {
+  const caller      = await requireAdmin()
+  const grantDateRaw = formData.get("grantDate") as string
+  const data = {
+    userId,
+    name:           formData.get("name") as string,
+    sharePercent:   parseFloat(formData.get("sharePercent") as string)   || 0,
+    grantEbitda:    parseFloat(formData.get("grantEbitda") as string)    || 0,
+    grantMultiplier: parseFloat(formData.get("grantMultiplier") as string) || 0,
+    grantDate:      grantDateRaw ? new Date(grantDateRaw) : new Date(),
+    vestingYears:   parseInt(formData.get("vestingYears") as string)     || 4,
+    vestingPercent: parseFloat(formData.get("vestingPercent") as string) || 25,
+  }
+  await (prisma as unknown as { phantomGrant: { create: (a: object) => Promise<unknown> } }).phantomGrant.create({ data })
+  await audit(caller.email!, "ADD_PHANTOM_GRANT", `User:${userId}`, undefined, { name: data.name })
+  revalidatePath("/admin/parameters")
+  revalidatePath("/")
+}
+
+export async function adminUpdatePhantomGrant(grantId: string, formData: FormData) {
+  const caller      = await requireAdmin()
+  const grantDateRaw = formData.get("grantDate") as string
+  const data = {
+    name:           formData.get("name") as string,
+    sharePercent:   parseFloat(formData.get("sharePercent") as string)   || 0,
+    grantEbitda:    parseFloat(formData.get("grantEbitda") as string)    || 0,
+    grantMultiplier: parseFloat(formData.get("grantMultiplier") as string) || 0,
+    grantDate:      grantDateRaw ? new Date(grantDateRaw) : new Date(),
+    vestingYears:   parseInt(formData.get("vestingYears") as string)     || 4,
+    vestingPercent: parseFloat(formData.get("vestingPercent") as string) || 25,
+  }
+  await (prisma as unknown as { phantomGrant: { update: (a: object) => Promise<unknown> } }).phantomGrant.update({
+    where: { id: grantId }, data,
+  })
+  await audit(caller.email!, "UPDATE_PHANTOM_GRANT", `PhantomGrant:${grantId}`, undefined, data)
+  revalidatePath("/admin/parameters")
+  revalidatePath("/")
+}
+
+export async function adminDeletePhantomGrant(grantId: string) {
+  const caller = await requireAdmin()
+  await audit(caller.email!, "DELETE_PHANTOM_GRANT", `PhantomGrant:${grantId}`)
+  await (prisma as unknown as { phantomGrant: { delete: (a: object) => Promise<unknown> } }).phantomGrant.delete({ where: { id: grantId } })
   revalidatePath("/admin/parameters")
   revalidatePath("/")
 }

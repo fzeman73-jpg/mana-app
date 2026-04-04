@@ -25,6 +25,7 @@ model User {
   isAllowed     Boolean   @default(false)
   password      String?
   divisionId    String?
+  position      String?   // C-level | TMAG | SMAG | Specialista | Ostatní
 
   accounts         Account[]
   sessions         Session[]
@@ -33,6 +34,7 @@ model User {
   snapshots        QuarterlySnapshot[]
   auditLogs        AuditLog[]
   parameterWeights ParameterWeight[]
+  phantomGrants    PhantomGrant[]
   division         Division? @relation(fields: [divisionId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
@@ -208,6 +210,37 @@ model VestingPayment {
 
   compensation Compensation @relation(fields: [compensationId], references: [id], onDelete: Cascade)
   @@unique([compensationId, vestingYear])
+}
+
+// ─── PHANTOM OPTION PLAN – GRANTY ────────────────────────────────────────────
+
+model PhantomGrant {
+  id              String   @id @default(cuid())
+  userId          String
+  name            String   // "POP 2024", "POP 2025 – Divize A"
+  sharePercent    Float    @default(0)   // podíl v %
+  grantEbitda     Float    @default(0)   // EBITDA při vstupu
+  grantMultiplier Float    @default(0)   // multiplikátor při vstupu
+  grantDate       DateTime @default(now())
+  vestingYears    Int      @default(4)
+  vestingPercent  Float    @default(25)  // % z hodnoty POP ročně
+  isActive        Boolean  @default(true)
+
+  user     User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments PhantomVestingPayment[]
+}
+
+model PhantomVestingPayment {
+  id             String    @id @default(cuid())
+  phantomGrantId String
+  vestingYear    Int
+  percentage     Float
+  isPaid         Boolean   @default(false)
+  paidAt         DateTime?
+  amount         Float?
+
+  grant PhantomGrant @relation(fields: [phantomGrantId], references: [id], onDelete: Cascade)
+  @@unique([phantomGrantId, vestingYear])
 }
 
 // ─── PER-MANAŽER PŘEPSÁNÍ VÁHY PARAMETRU ────────────────────────────────────

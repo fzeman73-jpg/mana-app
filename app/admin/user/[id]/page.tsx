@@ -1,6 +1,6 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
-import { setUserRole, setUserActive, deleteUser, setUserPassword, setUserDivision } from "@/lib/actions"
+import { setUserRole, setUserActive, deleteUser, setUserPassword, setUserDivision, setUserPosition } from "@/lib/actions"
 import Image from "next/image"
 import { redirect, notFound } from "next/navigation"
 
@@ -81,6 +81,26 @@ export default async function UserAdminPage({ params }: { params: Promise<{ id: 
             <span className="font-black text-gray-600">Manažer</span> — úprava parametrů + KPI &nbsp;·&nbsp;
             <span className="font-black text-gray-600">Admin</span> — vše
           </p>
+        </section>
+
+        {/* POZICE */}
+        <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+          <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-6">Pozice</h2>
+          <form action={setUserPosition.bind(null, user.id)} className="flex gap-3">
+            <select
+              name="position"
+              defaultValue={(user as unknown as { position: string | null }).position ?? ""}
+              className="flex-1 bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+            >
+              <option value="">— Bez pozice —</option>
+              {["C-level", "TMAG", "SMAG", "Specialista", "Ostatní"].map(p => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+            <button type="submit" className="bg-brand-cyan text-brand-navy px-6 py-3.5 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-pink hover:text-white transition-all shadow-sm active:scale-95">
+              Uložit
+            </button>
+          </form>
         </section>
 
         {/* DIVIZE */}
