@@ -168,22 +168,12 @@ export default async function ReportsPage({
 
         {sel && (
           <>
-            {/* Souhrnné KPI karty */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-brand-navy text-white p-5 rounded-[2rem]">
-                <p className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-1">POP závazek celkem</p>
-                <p className="text-2xl font-black">{fmt(totalPopLiability)}</p>
-                <p className="text-[10px] text-white/50 mt-0.5">hrubý zisk celkem</p>
-              </div>
-              <div className="bg-white p-5 rounded-[2rem] border border-gray-100 shadow-sm">
-                <p className="text-[9px] font-black text-brand-cyan uppercase tracking-widest mb-1">Roční vesting splátky</p>
-                <p className="text-2xl font-black text-gray-900">{fmt(totalAnnualVesting)}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">ročně</p>
-              </div>
+            {/* Souhrnné KPI karty — bonusy */}
+            <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
               <div className="bg-white p-5 rounded-[2rem] border border-gray-100 shadow-sm">
                 <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Bonus – cíl</p>
                 <p className="text-2xl font-black text-gray-900">{fmt(totalBonusBudget)}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">cílová výše</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">cílová výše za období</p>
               </div>
               <div className={`p-5 rounded-[2rem] border shadow-sm ${totalBonusCalculated >= totalBonusBudget * 0.9 ? "bg-brand-green/5 border-brand-green/20" : "bg-white border-gray-100"}`}>
                 <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Bonus – vypočtený</p>
@@ -203,6 +193,87 @@ export default async function ReportsPage({
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
                 Export Excel
               </a>
+            </div>
+
+            {/* Tabulka bonusů */}
+            <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+              <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-5">Bonusy — aktuální kvartál Q{curQ} {curY}</h2>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left py-3 pr-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Manažer</th>
+                      <th className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Cílový bonus</th>
+                      <th className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Vypočtený bonus</th>
+                      <th className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Plnění</th>
+                      {perfParams.map(p => (
+                        <th key={p.id} className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">{p.name}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {managerData.map(({ comp, bonus }) => (
+                      <tr key={comp.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="py-4 pr-4 font-black text-gray-900">{comp.user.name ?? comp.user.email}</td>
+                        <td className="py-4 px-4 text-right text-gray-500">{fmt(comp.targetBonusAnnual)}</td>
+                        <td className="py-4 px-4 text-right font-black text-gray-900">{fmt(bonus.total)}</td>
+                        <td className="py-4 px-4 text-right">
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                            comp.targetBonusAnnual > 0 && bonus.total / comp.targetBonusAnnual >= 0.9
+                              ? "bg-brand-green/10 text-brand-green"
+                              : "bg-brand-pink/10 text-brand-pink"
+                          }`}>
+                            {comp.targetBonusAnnual > 0 ? pct(bonus.total / comp.targetBonusAnnual * 100) : "—"}
+                          </span>
+                        </td>
+                        {perfParams.map(p => {
+                          const paramResult = bonus.parameters.find(r => r.id === p.id)
+                          return (
+                            <td key={p.id} className="py-4 px-4 text-right text-[11px]">
+                              {paramResult ? (
+                                <span className={!paramResult.thresholdMet || paramResult.gated ? "text-brand-pink" : "text-gray-700"}>
+                                  {pct(paramResult.achievement * 100)}
+                                  {!paramResult.thresholdMet && " ✗"}
+                                  {paramResult.gated && " ⊘"}
+                                </span>
+                              ) : "—"}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            {/* ── POP SEKCE — dlouhodobý nástroj ─────────────────────────── */}
+            <div className="flex items-center gap-4 pt-2">
+              <div className="flex-1 h-px bg-gray-200" />
+              <div className="flex items-center gap-2 px-4 py-2 bg-brand-navy rounded-full">
+                <span className="text-[9px] font-black text-white/60 uppercase tracking-widest">Phantom Option Plan</span>
+                <span className="text-[9px] font-black text-white/40">·</span>
+                <span className="text-[9px] font-black text-brand-cyan uppercase tracking-widest">Dlouhodobý nástroj — nezávislý na zvoleném období</span>
+              </div>
+              <div className="flex-1 h-px bg-gray-200" />
+            </div>
+            <p className="text-xs text-gray-400 text-center -mt-2">
+              POP odměňuje za nárůst hodnoty firmy od data grantu každého manažera. Níže uvedené hodnoty nejsou vázány na vybrané účetní období.
+            </p>
+
+            {/* Souhrnné KPI karty — POP */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-brand-navy text-white p-5 rounded-[2rem]">
+                <p className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-1">POP závazek celkem</p>
+                <p className="text-2xl font-black">{fmt(totalPopLiability)}</p>
+                <p className="text-[10px] text-white/50 mt-0.5">průběžná projekce · hrubý zisk všech manažerů</p>
+              </div>
+              <div className="bg-white p-5 rounded-[2rem] border border-gray-100 shadow-sm">
+                <p className="text-[9px] font-black text-brand-cyan uppercase tracking-widest mb-1">Roční vesting splátky</p>
+                <p className="text-2xl font-black text-gray-900">{fmt(totalAnnualVesting)}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">celkový objem ročních výplat</p>
+              </div>
             </div>
 
             {/* Tabulka POP závazku */}
@@ -275,59 +346,6 @@ export default async function ReportsPage({
                       <td className="py-3 pl-4 text-right font-black text-brand-cyan">{fmt(totalAnnualVesting)}</td>
                     </tr>
                   </tfoot>
-                </table>
-              </div>
-            </section>
-
-            {/* Tabulka bonusů */}
-            <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-              <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-5">Bonusy — aktuální kvartál Q{curQ} {curY}</h2>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-100">
-                      <th className="text-left py-3 pr-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Manažer</th>
-                      <th className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Cílový bonus</th>
-                      <th className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Vypočtený bonus</th>
-                      <th className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Plnění</th>
-                      {perfParams.map(p => (
-                        <th key={p.id} className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">{p.name}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {managerData.map(({ comp, bonus }) => (
-                      <tr key={comp.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="py-4 pr-4 font-black text-gray-900">{comp.user.name ?? comp.user.email}</td>
-                        <td className="py-4 px-4 text-right text-gray-500">{fmt(comp.targetBonusAnnual)}</td>
-                        <td className="py-4 px-4 text-right font-black text-gray-900">{fmt(bonus.total)}</td>
-                        <td className="py-4 px-4 text-right">
-                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                            comp.targetBonusAnnual > 0 && bonus.total / comp.targetBonusAnnual >= 0.9
-                              ? "bg-brand-green/10 text-brand-green"
-                              : "bg-brand-pink/10 text-brand-pink"
-                          }`}>
-                            {comp.targetBonusAnnual > 0 ? pct(bonus.total / comp.targetBonusAnnual * 100) : "—"}
-                          </span>
-                        </td>
-                        {perfParams.map(p => {
-                          const paramResult = bonus.parameters.find(r => r.id === p.id)
-                          return (
-                            <td key={p.id} className="py-4 px-4 text-right text-[11px]">
-                              {paramResult ? (
-                                <span className={!paramResult.thresholdMet || paramResult.gated ? "text-brand-pink" : "text-gray-700"}>
-                                  {pct(paramResult.achievement * 100)}
-                                  {!paramResult.thresholdMet && " ✗"}
-                                  {paramResult.gated && " ⊘"}
-                                </span>
-                              ) : "—"}
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
                 </table>
               </div>
             </section>
