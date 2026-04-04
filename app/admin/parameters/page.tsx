@@ -4,11 +4,10 @@ import {
   createPeriod, deletePeriod, setActivePeriod,
   createPerformanceParameter, updatePerformanceParameter, deletePerformanceParameter,
   upsertQuarterlyResult, lockQuarter, unlockQuarter,
-  upsertVestingBase, createBooster, toggleBooster, deleteBooster,
   adminSetCompensation, adminAddKpiTask, adminDeleteKpiTask, adminToggleKpiTask, updateKpiTaskCompletion,
   setParameterWeight, resetParameterWeight,
   adminAddPhantomGrant, adminUpdatePhantomGrant, adminDeletePhantomGrant,
-  closeQuarter,
+  closeQuarter, reopenQuarter,
 } from "@/lib/actions"
 import Image from "next/image"
 import { redirect } from "next/navigation"
@@ -41,15 +40,15 @@ export default async function ParametersPage({
   const selU = users.find(u => u.id === userId) ?? null
 
   // Data pro vybrané období
-  const [perfParams, vestingBase, boosters] = sel ? await Promise.all([
+  const [perfParams, closedQuarters] = sel ? await Promise.all([
     prisma.performanceParameter.findMany({
       where:   { periodId: sel.id },
       include: { results: { orderBy: { year: "asc" } } },
       orderBy: { sortOrder: "asc" },
     }),
-    prisma.vestingBase.findUnique({ where: { periodId: sel.id } }),
-    prisma.strategicBooster.findMany({ where: { periodId: sel.id }, orderBy: { name: "asc" } }),
-  ]) : [[], null, []]
+    (prisma as unknown as { quarterlySnapshot: { findMany: (a: object) => Promise<{ quarter: number; year: number }[]> } })
+      .quarterlySnapshot.findMany({ where: { periodId: sel.id }, select: { quarter: true, year: true } }),
+  ]) : [[], []]
 
   // Data pro vybraného uživatele + období
   type PhantomGrantRow = { id: string; name: string; sharePercent: number; grantEbitda: number; grantMultiplier: number; grantDate: Date; vestingYears: number; vestingPercent: number; isActive: boolean }
@@ -401,110 +400,54 @@ export default async function ParametersPage({
               })()}
             </section>
 
-            {/* POP – Valuační základ */}
-            <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-              <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-1">POP – Valuační základ</h2>
-              <p className="text-[11px] text-gray-400 mb-5">Hodnota firmy = Aktuální EBITDA × (Základní koeficient + Boostery). Slouží jako základ pro výpočet zisku z podílových plánů.</p>
 
-              <form action={upsertVestingBase.bind(null, sel.id)} className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-                <div>
-                  <Label>Aktuální EBITDA (CZK)</Label>
-                  <input name="currentEbitda" type="number" step="1" defaultValue={vestingBase?.currentEbitda ?? 0} className={inputCls} />
-                </div>
-                <div>
-                  <Label>Základní koeficient</Label>
-                  <input name="baseMultiplier" type="number" step="0.1" defaultValue={vestingBase?.baseMultiplier ?? 6.0} className={inputCls} />
-                </div>
-                <div className="flex flex-col justify-end">
-                  <button type="submit" className={btnCyan + " w-full"}>Uložit</button>
-                  {vestingBase && (
-                    <p className="text-[10px] text-gray-400 mt-2 text-center">
-                      Základ: {fmt(vestingBase.currentEbitda * vestingBase.baseMultiplier)}
-                    </p>
-                  )}
-                </div>
-              </form>
-
-              {/* Strategické boostery */}
-              <div className="pt-4 border-t border-gray-100">
-                <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Strategické boostery</h3>
-                <p className="text-[10px] text-gray-400 mb-4">Každý splněný booster navyšuje valuační koeficient. Celkový koeficient = {vestingBase?.baseMultiplier ?? 6} + {boosters.filter(b => b.isAchieved).reduce((s, b) => s + b.multiplierBoost, 0).toFixed(1)} (boostery) = <span className="font-black text-brand-green">{((vestingBase?.baseMultiplier ?? 6) + boosters.filter(b => b.isAchieved).reduce((s, b) => s + b.multiplierBoost, 0)).toFixed(1)}×</span></p>
-
-                {boosters.length > 0 && (
-                  <div className="space-y-2 mb-4">
-                    {boosters.map(b => (
-                      <div key={b.id} className={`flex items-start gap-3 p-4 rounded-xl border ${b.isAchieved ? "bg-brand-green/5 border-brand-green/20" : "bg-gray-50 border-gray-200"}`}>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-black text-sm text-gray-900">{b.name}</span>
-                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${b.isAchieved ? "bg-brand-green/20 text-brand-green" : "bg-gray-100 text-gray-500"}`}>
-                              +{b.multiplierBoost}× {b.isAchieved ? "✓ Splněno" : "Čeká"}
-                            </span>
-                          </div>
-                          {b.description && <p className="text-[10px] text-gray-400 mt-1">{b.description}</p>}
-                        </div>
-                        <div className="flex gap-2">
-                          <form action={toggleBooster.bind(null, b.id, b.isAchieved)}>
-                            <button className={`text-[9px] font-black px-3 py-1.5 rounded-lg uppercase tracking-wider transition-all border ${b.isAchieved ? "border-brand-green/30 text-brand-green hover:bg-brand-green/10" : "border-gray-200 text-gray-400 hover:border-brand-cyan hover:text-brand-cyan"}`}>
-                              {b.isAchieved ? "Zrušit" : "Splněno"}
-                            </button>
-                          </form>
-                          <form action={deleteBooster.bind(null, b.id)}>
-                            <button className="text-gray-300 hover:text-brand-pink p-1.5 rounded-lg transition-colors">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                            </button>
-                          </form>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <form action={createBooster.bind(null, sel.id)} className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-gray-50 rounded-2xl border border-dashed border-gray-300">
-                  <div className="sm:col-span-1">
-                    <Label>Název boosteru</Label>
-                    <input name="name" placeholder="např. Technologický rozvoj" required className={inputCls} />
-                  </div>
-                  <div className="sm:col-span-1">
-                    <Label>Popis podmínek</Label>
-                    <input name="description" placeholder="Co musí nastat..." className={inputCls} />
-                  </div>
-                  <div>
-                    <Label>Navýšení koeficientu (+×)</Label>
-                    <div className="flex gap-2">
-                      <input name="multiplierBoost" type="number" step="0.1" placeholder="0.5" required className={inputCls} />
-                      <button type="submit" className={btnCyan}>+</button>
-                    </div>
-                  </div>
-                </form>
-              </div>
-            </section>
-
-            {/* Uzavření kvartálu */}
+            {/* Uzavření / otevření kvartálu */}
             {isAdmin && (
               <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-                <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-1">Uzavření kvartálu</h2>
+                <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-1">Správa kvartálů</h2>
                 <p className="text-[11px] text-gray-400 mb-5">
                   Uzavřením kvartálu se vytvoří historický snapshot pro každého manažera (bonus + POP hodnota)
-                  a výsledky se zamknou. Akci nelze vzít zpět.
+                  a výsledky se zamknou. Otevřením se snapshot smaže a výsledky se odemknou.
                 </p>
-                <div className="flex flex-wrap gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[1, 2, 3, 4].map(q => {
-                    const isCurrentQ = q === curQ
+                    const isClosed   = (closedQuarters as { quarter: number; year: number }[]).some(s => s.quarter === q && s.year === curY)
+                    const isCurrentQ = q === curQ && curY === nowY
                     return (
-                      <form key={q} action={closeQuarter.bind(null, sel.id, q, curY)}>
-                        <button
-                          type="submit"
-                          className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
-                            isCurrentQ
-                              ? "bg-brand-navy text-white border-brand-navy hover:bg-brand-pink hover:border-brand-pink"
-                              : "bg-gray-50 text-gray-400 border-gray-200 hover:border-brand-navy hover:text-brand-navy"
-                          }`}
-                        >
-                          🔒 Uzavřít Q{q} {curY}
-                          {isCurrentQ && <span className="ml-1 text-brand-cyan/80">(aktuální)</span>}
-                        </button>
-                      </form>
+                      <div key={q} className={`rounded-2xl border p-4 flex flex-col gap-3 ${
+                        isClosed
+                          ? "bg-gray-50 border-gray-300"
+                          : isCurrentQ
+                          ? "bg-brand-navy/5 border-brand-navy/30"
+                          : "border-gray-200"
+                      }`}>
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-sm text-gray-900">Q{q} {curY}</span>
+                          {isClosed
+                            ? <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-gray-200 text-gray-500 uppercase tracking-wider">Uzavřen</span>
+                            : isCurrentQ
+                            ? <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-brand-cyan/15 text-brand-cyan uppercase tracking-wider">Aktuální</span>
+                            : <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-brand-green/10 text-brand-green uppercase tracking-wider">Otevřen</span>
+                          }
+                        </div>
+                        {isClosed ? (
+                          <form action={reopenQuarter.bind(null, sel.id, q, curY)}>
+                            <button type="submit" className="w-full text-[9px] font-black px-3 py-2 rounded-xl border border-gray-300 text-gray-500 hover:border-brand-pink hover:text-brand-pink transition-all uppercase tracking-wider">
+                              Otevřít znovu
+                            </button>
+                          </form>
+                        ) : (
+                          <form action={closeQuarter.bind(null, sel.id, q, curY)}>
+                            <button type="submit" className={`w-full text-[9px] font-black px-3 py-2 rounded-xl border transition-all uppercase tracking-wider ${
+                              isCurrentQ
+                                ? "bg-brand-navy text-white border-brand-navy hover:bg-brand-pink hover:border-brand-pink"
+                                : "border-gray-200 text-gray-400 hover:border-brand-navy hover:text-brand-navy"
+                            }`}>
+                              Uzavřít
+                            </button>
+                          </form>
+                        )}
+                      </div>
                     )
                   })}
                 </div>
@@ -772,19 +715,6 @@ export default async function ParametersPage({
                       <div className="px-6 pb-6 pt-2 space-y-4 border-t border-gray-100">
                         <p className="text-[11px] text-gray-400">Každý grant je samostatný POP s vlastním názvem, podílem a vestingem. Manažer může mít více grantů z různých let.</p>
 
-                        {/* Globální boostery — pro referenci */}
-                        {boosters.length > 0 && (
-                          <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Globální boostery ovlivňující multiplikátor</p>
-                            <div className="flex flex-wrap gap-2">
-                              {boosters.map((b: { id: string; name: string; multiplierBoost: number; isAchieved: boolean }) => (
-                                <span key={b.id} className={`text-[9px] font-black px-2.5 py-1 rounded-full border ${b.isAchieved ? "bg-brand-green/10 text-brand-green border-brand-green/20" : "bg-gray-100 text-gray-400 border-gray-200"}`}>
-                                  {b.isAchieved ? "✓" : "○"} {b.name} +{b.multiplierBoost}×
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
 
                         {/* Existující granty */}
                         {phantomList.map(g => (

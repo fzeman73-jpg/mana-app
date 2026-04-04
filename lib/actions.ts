@@ -283,6 +283,19 @@ export async function unlockQuarter(parameterId: string, quarter: number, year: 
   revalidatePath("/admin/parameters")
 }
 
+/** Znovu otevře kvartál – smaže snapshot a odemkne všechny výsledky v daném období */
+export async function reopenQuarter(periodId: string, quarter: number, year: number) {
+  const caller = await requireAdmin()
+  await (prisma as unknown as { quarterlySnapshot: { deleteMany: (a: object) => Promise<unknown> } }).quarterlySnapshot.deleteMany({ where: { periodId, quarter, year } })
+  await prisma.quarterlyResult.updateMany({
+    where: { parameter: { periodId }, quarter, year },
+    data:  { isLocked: false, lockedAt: null, lockedByEmail: null },
+  })
+  await audit(caller.email!, "REOPEN_QUARTER", `Period:${periodId}`, undefined, { quarter, year })
+  revalidatePath("/admin/parameters")
+  revalidatePath("/")
+}
+
 // ─── POP – VESTING BASE ───────────────────────────────────────────────────────
 
 export async function upsertVestingBase(periodId: string, formData: FormData) {
