@@ -3,16 +3,22 @@ import { prisma } from "@/lib/db"
 import { inviteUser, removeUser, createDivision, deleteDivision } from "@/lib/actions"
 import Image from "next/image"
 import { redirect } from "next/navigation"
+import { headers } from "next/headers"
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ invited?: string }>
+}) {
   const session = await auth()
-
   const caller = await prisma.user.findUnique({ where: { email: session?.user?.email || "" } })
   if (caller?.role !== "ADMIN") redirect("/")
 
+  const { invited } = await searchParams
+
   const [allowedUsers, divisions] = await Promise.all([
     prisma.user.findMany({
-      where: { isAllowed: true },
+      where:   { isAllowed: true },
       include: { division: true },
       orderBy: { email: "asc" },
     }),
@@ -21,6 +27,22 @@ export default async function AdminPage() {
       orderBy: { name: "asc" },
     }),
   ])
+
+  // Invite link for just-created user
+  let inviteLink: string | null = null
+  let invitedName: string | null = null
+  if (invited) {
+    const hdrs  = await headers()
+    const host  = hdrs.get("host") ?? "localhost:3000"
+    const proto = hdrs.get("x-forwarded-proto") ?? "http"
+    const invitedUser = await (prisma as unknown as {
+      user: { findUnique: (a: object) => Promise<{ name: string | null; inviteToken: string | null } | null> }
+    }).user.findUnique({ where: { id: invited }, select: { name: true, inviteToken: true } })
+    if (invitedUser?.inviteToken) {
+      inviteLink  = `${proto}://${host}/invite/${invitedUser.inviteToken}`
+      invitedName = invitedUser.name
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-8 font-sans selection:bg-brand-cyan/20">
@@ -57,53 +79,52 @@ export default async function AdminPage() {
           </div>
         </header>
 
-        {/* POZVÁNÍ UŽIVATELE */}
+        {/* POZVÁNKA BANNER */}
+        {inviteLink && (
+          <div className="bg-brand-green/10 border border-brand-green/30 rounded-[2rem] p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="flex-1">
+              <p className="text-[10px] font-black text-brand-green uppercase tracking-widest mb-1">
+                ✓ Uživatel {invitedName ?? ""} byl přidán
+              </p>
+              <p className="text-xs text-gray-600 mb-2">Zkopírujte odkaz a pošlete ho uživateli — po kliknutí si nastaví heslo. Platí 7 dní.</p>
+              <code className="text-[11px] font-bold text-brand-navy bg-white border border-gray-200 rounded-xl px-4 py-2 block break-all">
+                {inviteLink}
+              </code>
+            </div>
+            <a
+              href="/admin"
+              className="flex-shrink-0 bg-brand-green text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-brand-navy transition-all"
+            >
+              Zavřít
+            </a>
+          </div>
+        )}
+
+        {/* PŘIDAT UŽIVATELE */}
         <section className="bg-white p-12 rounded-[3.5rem] shadow-sm relative overflow-hidden ring-1 ring-gray-100">
           <div className="relative z-10">
-            <h2 className="text-brand-cyan text-[11px] font-black uppercase tracking-[0.4em] mb-8 italic">Přidat nového uživatele</h2>
+            <h2 className="text-brand-cyan text-[11px] font-black uppercase tracking-[0.4em] mb-2 italic">Přidat nového uživatele</h2>
+            <p className="text-xs text-gray-400 mb-6">Po přidání obdrží uživatel odkaz pro nastavení hesla. Může se přihlásit emailem i Google účtem.</p>
             <form action={inviteUser} className="flex flex-col lg:flex-row gap-4">
-              <input name="name" placeholder="Celé jméno" className="flex-1 bg-gray-50 border border-gray-200 rounded-2xl px-6 py-4 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900" required />
-              <input name="email" type="email" placeholder="Google email (@algotech.cz)" className="flex-[1.5] bg-gray-50 border border-gray-200 rounded-2xl px-6 py-4 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900" required />
+              <input
+                name="name"
+                placeholder="Celé jméno"
+                className="flex-1 bg-gray-50 border border-gray-200 rounded-2xl px-6 py-4 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
+                required
+              />
+              <input
+                name="email"
+                type="email"
+                placeholder="Email"
+                className="flex-[1.5] bg-gray-50 border border-gray-200 rounded-2xl px-6 py-4 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
+                required
+              />
               <button type="submit" className="bg-brand-cyan text-brand-navy hover:bg-brand-pink hover:text-white transition-all px-10 py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-sm active:scale-95">
                 Přidat
               </button>
             </form>
           </div>
           <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-brand-cyan rounded-full opacity-5 blur-[100px]" />
-        </section>
-
-        {/* DIVIZE */}
-        <section className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100">
-          <h3 className="font-black text-gray-900 uppercase italic tracking-tight mb-6">Divize</h3>
-
-          {divisions.length > 0 && (
-            <div className="flex flex-wrap gap-3 mb-6">
-              {divisions.map(d => (
-                <div key={d.id} className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-gray-200 bg-gray-50">
-                  <div>
-                    <p className="font-black text-gray-900 text-sm">{d.name}</p>
-                    {d.description && <p className="text-[10px] text-gray-400">{d.description}</p>}
-                    <p className="text-[9px] text-brand-cyan font-black uppercase tracking-wider mt-0.5">{d._count.users} uživatelů</p>
-                  </div>
-                  <form action={deleteDivision.bind(null, d.id)} className="ml-2">
-                    <button className="text-gray-300 hover:text-brand-pink transition-colors p-1" title="Smazat divizi">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                    </button>
-                  </form>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <form action={createDivision} className="flex flex-wrap gap-3">
-            <input name="name" placeholder="Název divize" required
-              className="flex-1 min-w-[160px] bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900" />
-            <input name="description" placeholder="Popis (volitelný)"
-              className="flex-[2] min-w-[200px] bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900" />
-            <button type="submit" className="bg-brand-cyan text-brand-navy hover:bg-brand-pink hover:text-white transition-all px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-sm active:scale-95 whitespace-nowrap">
-              + Přidat divizi
-            </button>
-          </form>
         </section>
 
         {/* TABULKA UŽIVATELŮ */}
@@ -174,10 +195,46 @@ export default async function AdminPage() {
 
           {allowedUsers.length === 0 && (
             <div className="p-16 text-center">
-              <p className="text-gray-400 font-black italic text-sm uppercase tracking-widest">Žádní manažeři nejsou autorizováni.</p>
+              <p className="text-gray-400 font-black italic text-sm uppercase tracking-widest">Žádní uživatelé nejsou autorizováni.</p>
             </div>
           )}
         </section>
+
+        {/* DIVIZE — méně časté nastavení */}
+        <section className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100">
+          <h3 className="font-black text-gray-900 uppercase italic tracking-tight mb-1">Divize</h3>
+          <p className="text-xs text-gray-400 mb-6">Organizační celky — přiřazují se uživatelům v nastavení.</p>
+
+          {divisions.length > 0 && (
+            <div className="flex flex-wrap gap-3 mb-6">
+              {(divisions as { id: string; name: string; description: string | null; _count: { users: number } }[]).map(d => (
+                <div key={d.id} className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-gray-200 bg-gray-50">
+                  <div>
+                    <p className="font-black text-gray-900 text-sm">{d.name}</p>
+                    {d.description && <p className="text-[10px] text-gray-400">{d.description}</p>}
+                    <p className="text-[9px] text-brand-cyan font-black uppercase tracking-wider mt-0.5">{d._count.users} uživatelů</p>
+                  </div>
+                  <form action={deleteDivision.bind(null, d.id)} className="ml-2">
+                    <button className="text-gray-300 hover:text-brand-pink transition-colors p-1" title="Smazat divizi">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                    </button>
+                  </form>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <form action={createDivision} className="flex flex-wrap gap-3">
+            <input name="name" placeholder="Název divize" required
+              className="flex-1 min-w-[160px] bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900" />
+            <input name="description" placeholder="Popis (volitelný)"
+              className="flex-[2] min-w-[200px] bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900" />
+            <button type="submit" className="bg-brand-cyan text-brand-navy hover:bg-brand-pink hover:text-white transition-all px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-sm active:scale-95 whitespace-nowrap">
+              + Přidat divizi
+            </button>
+          </form>
+        </section>
+
       </div>
     </div>
   )

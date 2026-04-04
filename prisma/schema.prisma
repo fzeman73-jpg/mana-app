@@ -23,7 +23,9 @@ model User {
   image         String?
   role          Role      @default(USER)
   isAllowed     Boolean   @default(false)
-  password      String?
+  password            String?
+  inviteToken         String?   @unique
+  inviteTokenExpiry   DateTime?
   divisionId    String?
   position      String?   // C-level | TMAG | SMAG | Specialista | Ostatní
 

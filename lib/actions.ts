@@ -1,5 +1,6 @@
 "use server"
 
+import { randomBytes } from "crypto"
 import { auth, signIn } from "@/auth"
 import { prisma } from "@/lib/db"
 import { revalidatePath } from "next/cache"
@@ -67,13 +68,52 @@ export async function inviteUser(formData: FormData) {
   const email = formData.get("email") as string
   const name  = formData.get("name") as string
 
-  await prisma.user.upsert({
+  const inviteToken       = randomBytes(32).toString("hex")
+  const inviteTokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 dní
+
+  const inviteUserPrisma = prisma as unknown as {
+    user: {
+      upsert: (a: object) => Promise<{ id: string }>
+      findFirst: (a: object) => Promise<{ id: string } | null>
+      update: (a: object) => Promise<unknown>
+    }
+  }
+
+  const user = await inviteUserPrisma.user.upsert({
     where:  { email },
-    update: { isAllowed: true },
-    create: { email, name, isAllowed: true, role: "USER" },
+    update: { isAllowed: true, inviteToken, inviteTokenExpiry },
+    create: { email, name, isAllowed: true, role: "USER", inviteToken, inviteTokenExpiry },
   })
   await audit(caller.email!, "INVITE_USER", `User:${email}`)
   revalidatePath("/admin")
+  redirect(`/admin?invited=${user.id}`)
+}
+
+export async function setPasswordFromInvite(token: string, formData: FormData) {
+  const password = formData.get("password") as string
+  if (!password || password.length < 8) throw new Error("Heslo musí mít alespoň 8 znaků")
+
+  const invitePrisma = prisma as unknown as {
+    user: {
+      findFirst: (a: object) => Promise<{ id: string } | null>
+      update: (a: object) => Promise<unknown>
+    }
+  }
+
+  const user = await invitePrisma.user.findFirst({
+    where: {
+      inviteToken: token,
+      inviteTokenExpiry: { gt: new Date() },
+    },
+  })
+  if (!user) throw new Error("Pozvánka je neplatná nebo vypršela")
+
+  const hashed = await bcrypt.hash(password, 10)
+  await invitePrisma.user.update({
+    where: { id: user.id },
+    data:  { password: hashed, inviteToken: null, inviteTokenExpiry: null },
+  })
+  redirect("/")
 }
 
 export async function setUserActive(userId: string, isAllowed: boolean) {
