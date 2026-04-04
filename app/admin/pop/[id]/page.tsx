@@ -280,30 +280,40 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
 
                 {/* Edit form */}
                 <div className="px-5 py-4 border-b border-gray-200">
-                  <form action={upsertPopAssignment.bind(null, plan.id)} className="flex gap-3 flex-wrap">
+                  <form action={upsertPopAssignment.bind(null, plan.id)} className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
                     <input type="hidden" name="userId" value={a.userId} />
-                    <input
-                      name="sharePercent" type="number" step="0.01" defaultValue={a.sharePercent}
-                      placeholder="Podíl %"
-                      className="w-28 bg-white border border-gray-200 rounded-xl px-4 py-2.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
-                    />
-                    <input
-                      name="grantDate" type="date" defaultValue={new Date(a.grantDate).toISOString().split("T")[0]}
-                      className="bg-white border border-gray-200 rounded-xl px-4 py-2.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
-                    />
-                    <input
-                      name="grantEbitda" type="number" step="0.01" defaultValue={a.grantEbitda}
-                      placeholder="EBITDA při grantu"
-                      className="flex-1 min-w-32 bg-white border border-gray-200 rounded-xl px-4 py-2.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
-                    />
-                    <button type="submit" className="bg-brand-cyan text-brand-navy px-4 py-2.5 rounded-xl font-black uppercase text-[9px] tracking-widest hover:bg-brand-pink hover:text-white transition-all shadow-sm active:scale-95 flex-shrink-0">
-                      Uložit
-                    </button>
-                    <form action={deletePopAssignment.bind(null, a.id, plan.id)}>
-                      <button type="submit" className="bg-brand-pink/10 text-brand-pink border border-brand-pink/20 px-4 py-2.5 rounded-xl font-black uppercase text-[9px] tracking-widest hover:bg-brand-pink hover:text-white transition-all active:scale-95">
-                        Odebrat
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1 ml-1">Podíl %</label>
+                      <input
+                        name="sharePercent" type="number" step="0.01" defaultValue={a.sharePercent}
+                        className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1 ml-1">Datum grantu</label>
+                      <input
+                        name="grantDate" type="date" defaultValue={new Date(a.grantDate).toISOString().split("T")[0]}
+                        className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1 ml-1">Vstupní EBITDA (CZK)</label>
+                      <input
+                        name="grantEbitda" type="number" step="0.01" defaultValue={a.grantEbitda || ""}
+                        placeholder={`výchozí ${fmt(plan.grantEbitda)}`}
+                        className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
+                      />
+                    </div>
+                    <div className="flex gap-2 items-end">
+                      <button type="submit" className="flex-1 bg-brand-cyan text-brand-navy px-4 py-2.5 rounded-xl font-black uppercase text-[9px] tracking-widest hover:bg-brand-pink hover:text-white transition-all shadow-sm active:scale-95">
+                        Uložit
                       </button>
-                    </form>
+                    </div>
+                  </form>
+                  <form action={deletePopAssignment.bind(null, a.id, plan.id)} className="mt-2">
+                    <button type="submit" className="text-[9px] font-black text-gray-400 hover:text-brand-pink transition-colors uppercase tracking-widest px-1 py-1">
+                      Odebrat přiřazení
+                    </button>
                   </form>
                 </div>
 
@@ -351,31 +361,45 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
           })}
 
           {unassignedUsers.length > 0 && (
-            <form action={upsertPopAssignment.bind(null, plan.id)} className="flex gap-3 flex-wrap mt-4">
-              <select
-                name="userId" required
-                className="flex-1 min-w-40 bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
-              >
-                <option value="">— Vyberte manažera —</option>
-                {unassignedUsers.map(u => (
-                  <option key={u.id} value={u.id}>{u.name ?? u.email ?? "?"}</option>
-                ))}
-              </select>
-              <input
-                name="sharePercent" type="number" step="0.01" min="0" max="100" defaultValue="0" placeholder="Podíl %"
-                className="w-28 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
-              />
-              <input
-                name="grantDate" type="date" defaultValue={new Date().toISOString().split("T")[0]}
-                className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
-              />
-              <input
-                name="grantEbitda" type="number" step="0.01" defaultValue="0" placeholder="EBITDA při grantu"
-                className="flex-1 min-w-36 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
-              />
-              <button type="submit" className="bg-brand-cyan text-brand-navy px-6 py-3.5 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-pink hover:text-white transition-all shadow-sm active:scale-95 flex-shrink-0">
-                Přiřadit
-              </button>
+            <form action={upsertPopAssignment.bind(null, plan.id)} className="grid grid-cols-1 md:grid-cols-5 gap-3 mt-4 items-end">
+              <div className="md:col-span-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Manažer</label>
+                <select
+                  name="userId" required
+                  className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+                >
+                  <option value="">— Vyberte —</option>
+                  {unassignedUsers.map(u => (
+                    <option key={u.id} value={u.id}>{u.name ?? u.email ?? "?"}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Podíl %</label>
+                <input
+                  name="sharePercent" type="number" step="0.01" min="0" max="100" placeholder="0"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Datum grantu</label>
+                <input
+                  name="grantDate" type="date" defaultValue={new Date().toISOString().split("T")[0]}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Vstupní EBITDA (CZK)</label>
+                <input
+                  name="grantEbitda" type="number" step="0.01" placeholder={`výchozí ${fmt(plan.grantEbitda)}`}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
+                />
+              </div>
+              <div className="flex items-end">
+                <button type="submit" className="w-full bg-brand-cyan text-brand-navy px-6 py-3.5 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-pink hover:text-white transition-all shadow-sm active:scale-95">
+                  Přiřadit
+                </button>
+              </div>
             </form>
           )}
         </section>
