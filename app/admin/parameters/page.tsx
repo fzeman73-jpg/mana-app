@@ -5,7 +5,7 @@ import {
   createPerformanceParameter, updatePerformanceParameter, deletePerformanceParameter,
   upsertQuarterlyResult, lockQuarter, unlockQuarter,
   upsertVestingBase, createBooster, toggleBooster, deleteBooster,
-  adminSetCompensation, adminAddKpiTask, adminDeleteKpiTask,
+  adminSetCompensation, adminAddKpiTask, adminDeleteKpiTask, adminToggleKpiTask, updateKpiTaskCompletion,
   closeQuarter,
 } from "@/lib/actions"
 import Image from "next/image"
@@ -585,43 +585,98 @@ export default async function ParametersPage({
                   <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
                     <h3 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-5">Individuální KPI úkoly</h3>
 
-                    <form action={adminAddKpiTask.bind(null, selU.id, sel.id)} className="flex gap-3 mb-5 bg-gray-50 p-3 rounded-xl border border-gray-200">
-                      <div className="flex-1 space-y-2">
-                        <input name="name" placeholder="Název úkolu..." required className="w-full bg-transparent px-3 py-2 outline-none font-bold text-sm text-gray-900 placeholder:text-gray-400" />
-                        <input name="description" placeholder="Popis a podmínky splnění..." className="w-full bg-transparent px-3 py-1 outline-none text-[11px] text-gray-500 placeholder:text-gray-300" />
+                    <form action={adminAddKpiTask.bind(null, selU.id, sel.id)} className="space-y-2 mb-5 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                      <div className="flex gap-3">
+                        <div className="flex-1 space-y-2">
+                          <input name="name" placeholder="Název úkolu..." required className="w-full bg-transparent px-3 py-2 outline-none font-bold text-sm text-gray-900 placeholder:text-gray-400" />
+                          <input name="description" placeholder="Popis a podmínky splnění..." className="w-full bg-transparent px-3 py-1 outline-none text-[11px] text-gray-500 placeholder:text-gray-300" />
+                        </div>
+                        <div className="flex flex-col gap-2 items-end">
+                          <input name="weight" type="number" step="1" min="0" max="100" placeholder="%" required
+                            className="w-16 bg-white rounded-lg px-2 py-2 text-center font-black text-brand-cyan border-2 border-gray-200 focus:border-brand-cyan outline-none text-sm" />
+                          <button type="submit" className={btnCyan}>+</button>
+                        </div>
                       </div>
-                      <div className="flex flex-col gap-2">
-                        <input name="weight" type="number" step="1" min="0" max="100" placeholder="%" required
-                          className="w-16 bg-white rounded-lg px-2 py-2 text-center font-black text-brand-cyan border-2 border-gray-200 focus:border-brand-cyan outline-none text-sm" />
-                        <button type="submit" className={btnCyan}>+</button>
+                      <div className="flex items-center gap-3 pt-1 border-t border-gray-200">
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Typ:</span>
+                        {[["BOOLEAN","Splněno/Ne"],["PERCENT","% plnění"],["AMOUNT","Částka"]].map(([val, label]) => (
+                          <label key={val} className="flex items-center gap-1 cursor-pointer">
+                            <input type="radio" name="taskType" value={val} defaultChecked={val === "BOOLEAN"} className="accent-brand-cyan" />
+                            <span className="text-[10px] font-bold text-gray-600">{label}</span>
+                          </label>
+                        ))}
+                        <input name="targetAmount" type="number" step="1" min="0" placeholder="Cíl (CZK)"
+                          className="ml-auto w-28 bg-white rounded-lg px-2 py-1 text-sm font-bold text-gray-700 border border-gray-200 focus:border-brand-cyan outline-none placeholder:text-gray-300" />
+                        <span className="text-[9px] text-gray-400">← jen pro typ Částka</span>
                       </div>
                     </form>
 
-                    {kpiTasks.length === 0 ? (
-                      <p className="text-center text-gray-300 py-6 text-sm italic border-2 border-dashed border-gray-100 rounded-xl">Žádné KPI úkoly.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {kpiTasks.map(t => (
-                          <div key={t.id} className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${t.isCompleted ? "bg-brand-green/5 border-brand-green/20" : "bg-gray-50 border-gray-200"}`}>
-                            <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${t.isCompleted ? "bg-brand-green" : "bg-gray-300"}`} />
-                            <div className="flex-1 min-w-0">
-                              <p className={`font-black text-sm ${t.isCompleted ? "text-brand-green italic" : "text-gray-900"}`}>{t.name}</p>
-                              {t.description && <p className="text-[10px] text-gray-400 mt-0.5">{t.description}</p>}
-                            </div>
-                            <span className="text-[9px] font-black text-brand-cyan bg-white px-2 py-0.5 rounded-full border border-gray-200 flex-shrink-0">{t.weight}%</span>
-                            <form action={adminDeleteKpiTask.bind(null, t.id)}>
-                              <button className="text-gray-300 hover:text-brand-pink p-1 rounded transition-colors flex-shrink-0">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                              </button>
-                            </form>
-                          </div>
-                        ))}
-                        <p className={`text-[10px] text-right pt-1 font-black ${kpiTasks.reduce((s, t) => s + t.weight, 0) === 100 ? "text-brand-green" : "text-brand-pink"}`}>
-                          Váha celkem: {kpiTasks.reduce((s, t) => s + t.weight, 0)}%
-                          {kpiTasks.reduce((s, t) => s + t.weight, 0) !== 100 && " (doporučeno 100%)"}
-                        </p>
-                      </div>
-                    )}
+                    {(() => {
+                      type KpiExt = { id: string; name: string; description: string | null; weight: number; isCompleted: boolean; taskType: string; completionPct: number | null; targetAmount: number | null; actualAmount: number | null }
+                      const tasks = kpiTasks as unknown as KpiExt[]
+                      if (tasks.length === 0) return (
+                        <p className="text-center text-gray-300 py-6 text-sm italic border-2 border-dashed border-gray-100 rounded-xl">Žádné KPI úkoly.</p>
+                      )
+                      const typeLabel: Record<string, string> = { BOOLEAN: "Splněno/Ne", PERCENT: "% plnění", AMOUNT: "Částka" }
+                      return (
+                        <div className="space-y-2">
+                          {tasks.map(t => {
+                            const norm = t.taskType === "PERCENT" ? Math.min(1, (t.completionPct ?? 0) / 100)
+                              : t.taskType === "AMOUNT" && (t.targetAmount ?? 0) > 0 ? Math.min(1, (t.actualAmount ?? 0) / t.targetAmount!)
+                              : t.isCompleted ? 1 : 0
+                            return (
+                              <div key={t.id} className={`px-4 py-3 rounded-xl border ${norm > 0 ? "bg-brand-green/5 border-brand-green/20" : "bg-gray-50 border-gray-200"}`}>
+                                <div className="flex items-start gap-3">
+                                  <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${norm >= 1 ? "bg-brand-green" : norm > 0 ? "bg-brand-cyan" : "bg-gray-300"}`} />
+                                  <div className="flex-1 min-w-0">
+                                    <p className={`font-black text-sm ${norm >= 1 ? "text-brand-green italic" : "text-gray-900"}`}>{t.name}</p>
+                                    {t.description && <p className="text-[10px] text-gray-400 mt-0.5">{t.description}</p>}
+                                  </div>
+                                  <span className="text-[9px] font-black text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200 flex-shrink-0">{typeLabel[t.taskType] ?? t.taskType}</span>
+                                  <span className="text-[9px] font-black text-brand-cyan bg-white px-2 py-0.5 rounded-full border border-gray-200 flex-shrink-0">{t.weight}%</span>
+                                  <form action={adminDeleteKpiTask.bind(null, t.id)}>
+                                    <button className="text-gray-300 hover:text-brand-pink p-1 rounded transition-colors flex-shrink-0">
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                    </button>
+                                  </form>
+                                </div>
+                                {t.taskType === "BOOLEAN" && (
+                                  <form action={adminToggleKpiTask.bind(null, t.id, t.isCompleted)} className="mt-2">
+                                    <button type="submit" className={`text-[9px] font-black px-3 py-1.5 rounded-xl border transition-all ${t.isCompleted ? "border-brand-green/30 text-brand-green hover:bg-brand-green/10" : "border-gray-200 text-gray-400 hover:border-brand-cyan hover:text-brand-cyan"}`}>
+                                      {t.isCompleted ? "✓ Splněno" : "Označit jako splněno"}
+                                    </button>
+                                  </form>
+                                )}
+                                {t.taskType === "PERCENT" && (
+                                  <form action={updateKpiTaskCompletion.bind(null, t.id)} className="mt-2 flex items-center gap-2">
+                                    <input type="hidden" name="taskType" value="PERCENT" />
+                                    <input name="completionPct" type="number" min="0" max="100" step="1" defaultValue={t.completionPct ?? 0}
+                                      className="w-20 bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm font-bold text-gray-900 outline-none focus:border-brand-cyan" />
+                                    <span className="text-[10px] text-gray-400 font-bold">%</span>
+                                    <button type="submit" className="text-[9px] font-black px-3 py-1.5 rounded-xl border border-brand-cyan/30 text-brand-cyan hover:bg-brand-cyan/10 transition-all">Uložit</button>
+                                  </form>
+                                )}
+                                {t.taskType === "AMOUNT" && (
+                                  <form action={updateKpiTaskCompletion.bind(null, t.id)} className="mt-2 flex items-center gap-2 flex-wrap">
+                                    <input type="hidden" name="taskType" value="AMOUNT" />
+                                    <span className="text-[10px] text-gray-400">Cíl: <span className="font-black text-gray-700">{fmt(t.targetAmount ?? 0)}</span></span>
+                                    <span className="text-gray-300">|</span>
+                                    <span className="text-[10px] text-gray-400">Skutečnost:</span>
+                                    <input name="actualAmount" type="number" min="0" step="1" defaultValue={t.actualAmount ?? 0}
+                                      className="w-28 bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm font-bold text-gray-900 outline-none focus:border-brand-cyan" />
+                                    <button type="submit" className="text-[9px] font-black px-3 py-1.5 rounded-xl border border-brand-cyan/30 text-brand-cyan hover:bg-brand-cyan/10 transition-all">Uložit</button>
+                                  </form>
+                                )}
+                              </div>
+                            )
+                          })}
+                          <p className={`text-[10px] text-right pt-1 font-black ${tasks.reduce((s, t) => s + t.weight, 0) === 100 ? "text-brand-green" : "text-brand-pink"}`}>
+                            Váha celkem: {tasks.reduce((s, t) => s + t.weight, 0)}%
+                            {tasks.reduce((s, t) => s + t.weight, 0) !== 100 && " (doporučeno 100%)"}
+                          </p>
+                        </div>
+                      )
+                    })()}
                   </section>
                 </>
               )}

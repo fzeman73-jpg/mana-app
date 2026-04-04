@@ -31,8 +31,8 @@ export type BonusBreakdown = {
 }
 
 export type KpiInput = {
-  weight:      number
-  isCompleted: boolean
+  weight:        number
+  completionPct: number  // normalizováno na 0–1 (BOOLEAN: 0|1, PERCENT: pct/100, AMOUNT: actual/target)
 }
 
 export type BoosterInput = {
@@ -133,8 +133,8 @@ export function calcBonus(
   // 4. KPI složka
   if (kpiWeight > 0 && kpiTasks.length > 0) {
     const totalW    = kpiTasks.reduce((s, t) => s + t.weight, 0)
-    const doneW     = kpiTasks.filter(t => t.isCompleted).reduce((s, t) => s + t.weight, 0)
-    const kpiAch    = totalW > 0 ? doneW / totalW : 0
+    const weightedW = kpiTasks.reduce((s, t) => s + t.weight * t.completionPct, 0)
+    const kpiAch    = totalW > 0 ? weightedW / totalW : 0
     const kpiBonus  = targetBonusAnnual * (kpiWeight / 100) * kpiAch
     results.push({
       id:           'kpi',

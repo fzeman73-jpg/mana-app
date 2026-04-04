@@ -356,17 +356,35 @@ export async function adminSetCompensation(userId: string, periodId: string, for
 // ─── KPI ÚKOLY ────────────────────────────────────────────────────────────────
 
 export async function adminAddKpiTask(userId: string, periodId: string, formData: FormData) {
-  const caller = await requireAdmin()
+  const caller   = await requireAdmin()
+  const taskType = (formData.get("taskType") as string) || "BOOLEAN"
   const data = {
-    name:        formData.get("name") as string,
-    description: (formData.get("description") as string) || undefined,
-    weight:      parseFloat(formData.get("weight") as string) || 0,
+    name:         formData.get("name") as string,
+    description:  (formData.get("description") as string) || undefined,
+    weight:       parseFloat(formData.get("weight") as string) || 0,
+    taskType,
+    targetAmount: taskType === "AMOUNT" ? (parseFloat(formData.get("targetAmount") as string) || null) : null,
     userId,
     periodId,
   }
   await prisma.kpiTask.create({ data })
   await audit(caller.email!, "ADD_KPI_TASK", `User:${userId}`, undefined, data)
   revalidatePath("/admin/parameters")
+}
+
+export async function updateKpiTaskCompletion(taskId: string, formData: FormData) {
+  const caller   = await requireAdminOrManager()
+  const taskType = formData.get("taskType") as string
+  const data: Record<string, unknown> = {}
+  if (taskType === "PERCENT") {
+    data.completionPct = Math.min(100, Math.max(0, parseFloat(formData.get("completionPct") as string) || 0))
+  } else if (taskType === "AMOUNT") {
+    data.actualAmount = parseFloat(formData.get("actualAmount") as string) || 0
+  }
+  await prisma.kpiTask.update({ where: { id: taskId }, data })
+  await audit(caller.email!, "TOGGLE_KPI_TASK", `KpiTask:${taskId}`, undefined, data)
+  revalidatePath("/admin/parameters")
+  revalidatePath("/")
 }
 
 export async function adminDeleteKpiTask(taskId: string) {
@@ -429,7 +447,13 @@ export async function closeQuarter(periodId: string, quarter: number, year: numb
     const bonus = calcBonus(
       paramInputs,
       comp.targetBonusAnnual,
-      kpiTasks.map(t => ({ weight: t.weight, isCompleted: t.isCompleted })),
+      kpiTasks.map(t => {
+        const tt = t as unknown as { taskType: string; completionPct: number | null; targetAmount: number | null; actualAmount: number | null }
+        let pct = t.isCompleted ? 1 : 0
+        if (tt.taskType === "PERCENT") pct = Math.min(1, (tt.completionPct ?? 0) / 100)
+        else if (tt.taskType === "AMOUNT" && (tt.targetAmount ?? 0) > 0) pct = Math.min(1, (tt.actualAmount ?? 0) / tt.targetAmount!)
+        return { weight: t.weight, completionPct: pct }
+      }),
       (comp as unknown as { kpiWeight: number }).kpiWeight ?? 0
     )
 

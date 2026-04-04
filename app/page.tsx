@@ -1,6 +1,6 @@
 import { auth, signIn, signOut } from "@/auth"
 import { prisma } from "@/lib/db"
-import { loginWithCredentials, adminToggleKpiTask } from "@/lib/actions"
+import { loginWithCredentials, adminToggleKpiTask, updateKpiTaskCompletion } from "@/lib/actions"
 import { calcBonus, calcPOP, calcVestingSchedule, yearsSinceDate, currentQuarter } from "@/lib/calculator"
 import Image from "next/image"
 
@@ -114,17 +114,26 @@ export default async function Home({
     }
   })
 
+  // Normalizace KPI plnění per typ (0–1)
+  type KpiTaskExt = { id: string; name: string; description: string | null; weight: number; isCompleted: boolean; taskType: string; completionPct: number | null; targetAmount: number | null; actualAmount: number | null }
+  const kpiTasksExt = kpiTasks as unknown as KpiTaskExt[]
+  const kpiNorm = kpiTasksExt.map((t: KpiTaskExt) => {
+    if (t.taskType === "PERCENT") return Math.min(1, (t.completionPct ?? 0) / 100)
+    if (t.taskType === "AMOUNT" && (t.targetAmount ?? 0) > 0) return Math.min(1, (t.actualAmount ?? 0) / t.targetAmount!)
+    return t.isCompleted ? 1 : 0
+  })
+
   const bonusBreakdown = calcBonus(
     paramInputs,
     compensation?.targetBonusAnnual ?? 0,
-    kpiTasks.map(t => ({ weight: t.weight, isCompleted: t.isCompleted })),
+    kpiTasksExt.map((t: KpiTaskExt, i: number) => ({ weight: t.weight, completionPct: kpiNorm[i] })),
     compensation?.kpiWeight ?? 0
   )
 
-  // KPI plnění
-  const totalKpiW = kpiTasks.reduce((s, t) => s + t.weight, 0)
-  const doneKpiW  = kpiTasks.filter(t => t.isCompleted).reduce((s, t) => s + t.weight, 0)
-  const kpiAch    = totalKpiW > 0 ? doneKpiW / totalKpiW : 0
+  // KPI plnění (vážený průměr)
+  const totalKpiW   = kpiTasksExt.reduce((s: number, t: KpiTaskExt) => s + t.weight, 0)
+  const weightedKpi = kpiTasksExt.reduce((s: number, t: KpiTaskExt, i: number) => s + t.weight * kpiNorm[i], 0)
+  const kpiAch      = totalKpiW > 0 ? weightedKpi / totalKpiW : 0
 
   // POP
   const popResult = vestingBase && compensation ? calcPOP({
@@ -415,28 +424,62 @@ export default async function Home({
                     </div>
 
                     <div className="space-y-2">
-                      {kpiTasks.map(t => (
-                        <div key={t.id} className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${t.isCompleted ? "bg-brand-green/5 border-brand-green/20" : "bg-gray-50 border-gray-200"}`}>
-                          <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${t.isCompleted ? "bg-brand-green" : "bg-gray-300"}`} />
-                          <div className="flex-1 min-w-0">
-                            <p className={`font-black text-sm ${t.isCompleted ? "text-brand-green italic" : "text-gray-900"}`}>{t.name}</p>
-                            {t.description && <p className="text-[10px] text-gray-400 mt-0.5">{t.description}</p>}
+                      {kpiTasksExt.map((t: KpiTaskExt, i: number) => {
+                        const norm = kpiNorm[i]
+                        const pctDisplay = Math.round(norm * 100)
+                        const isGreen = norm >= 1
+                        return (
+                          <div key={t.id} className={`px-4 py-3 rounded-xl border ${norm > 0 ? "bg-brand-green/5 border-brand-green/20" : "bg-gray-50 border-gray-200"}`}>
+                            <div className="flex items-start gap-3">
+                              <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${isGreen ? "bg-brand-green" : norm > 0 ? "bg-brand-cyan" : "bg-gray-300"}`} />
+                              <div className="flex-1 min-w-0">
+                                <p className={`font-black text-sm ${isGreen ? "text-brand-green italic" : "text-gray-900"}`}>{t.name}</p>
+                                {t.description && <p className="text-[10px] text-gray-400 mt-0.5">{t.description}</p>}
+                              </div>
+                              <span className="text-[9px] font-black text-brand-cyan bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200 flex-shrink-0">{t.weight}%</span>
+                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full flex-shrink-0 ${isGreen ? "bg-brand-green/20 text-brand-green" : norm > 0 ? "bg-brand-cyan/10 text-brand-cyan" : "bg-gray-100 text-gray-400"}`}>
+                                {pctDisplay}%
+                              </span>
+                            </div>
+
+                            {/* Ovládací prvek per typ */}
+                            {canEdit && t.taskType === "BOOLEAN" && (
+                              <form action={adminToggleKpiTask.bind(null, t.id, t.isCompleted)} className="mt-2">
+                                <button className={`text-[9px] font-black px-3 py-1.5 rounded-xl border transition-all ${t.isCompleted ? "border-brand-green/30 text-brand-green hover:bg-brand-green/10" : "border-gray-200 text-gray-400 hover:border-brand-cyan hover:text-brand-cyan"}`}>
+                                  {t.isCompleted ? "✓ Splněno" : "Označit jako splněno"}
+                                </button>
+                              </form>
+                            )}
+                            {canEdit && t.taskType === "PERCENT" && (
+                              <form action={updateKpiTaskCompletion.bind(null, t.id)} className="mt-2 flex items-center gap-2">
+                                <input type="hidden" name="taskType" value="PERCENT" />
+                                <input name="completionPct" type="number" min="0" max="100" step="1"
+                                  defaultValue={t.completionPct ?? 0}
+                                  className="w-20 bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm font-bold text-gray-900 outline-none focus:border-brand-cyan" />
+                                <span className="text-[10px] text-gray-400 font-bold">%</span>
+                                <button type="submit" className="text-[9px] font-black px-3 py-1.5 rounded-xl border border-brand-cyan/30 text-brand-cyan hover:bg-brand-cyan/10 transition-all">Uložit</button>
+                              </form>
+                            )}
+                            {canEdit && t.taskType === "AMOUNT" && (
+                              <form action={updateKpiTaskCompletion.bind(null, t.id)} className="mt-2 flex items-center gap-2 flex-wrap">
+                                <input type="hidden" name="taskType" value="AMOUNT" />
+                                <span className="text-[10px] text-gray-400">Cíl: <span className="font-black text-gray-700">{fmt(t.targetAmount ?? 0)}</span></span>
+                                <span className="text-gray-300">|</span>
+                                <span className="text-[10px] text-gray-400">Skutečnost:</span>
+                                <input name="actualAmount" type="number" min="0" step="1"
+                                  defaultValue={t.actualAmount ?? 0}
+                                  className="w-28 bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm font-bold text-gray-900 outline-none focus:border-brand-cyan" />
+                                <button type="submit" className="text-[9px] font-black px-3 py-1.5 rounded-xl border border-brand-cyan/30 text-brand-cyan hover:bg-brand-cyan/10 transition-all">Uložit</button>
+                              </form>
+                            )}
+                            {!canEdit && t.taskType !== "BOOLEAN" && (
+                              <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full transition-all ${isGreen ? "bg-brand-green" : "bg-brand-cyan"}`} style={{ width: `${pctDisplay}%` }} />
+                              </div>
+                            )}
                           </div>
-                          <span className="text-[9px] font-black text-brand-cyan bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200 flex-shrink-0">{t.weight}%</span>
-                          {canEdit && (
-                            <form action={adminToggleKpiTask.bind(null, t.id, t.isCompleted)}>
-                              <button className={`text-[9px] font-black px-3 py-1.5 rounded-xl border transition-all flex-shrink-0 ${t.isCompleted ? "border-brand-green/30 text-brand-green hover:bg-brand-green/10" : "border-gray-200 text-gray-400 hover:border-brand-cyan hover:text-brand-cyan"}`}>
-                                {t.isCompleted ? "Splněno" : "Čeká"}
-                              </button>
-                            </form>
-                          )}
-                          {!canEdit && (
-                            <span className={`text-[9px] font-black px-3 py-1.5 rounded-xl border flex-shrink-0 ${t.isCompleted ? "border-brand-green/30 text-brand-green" : "border-gray-200 text-gray-400"}`}>
-                              {t.isCompleted ? "Splněno" : "Čeká"}
-                            </span>
-                          )}
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </section>
                 )}

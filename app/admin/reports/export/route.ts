@@ -54,7 +54,13 @@ export async function GET(req: NextRequest) {
         target:       res?.target ?? 0,
       }
     })
-    const bonus = calcBonus(params, comp.targetBonusAnnual, kpiTasks.map(t => ({ weight: t.weight, isCompleted: t.isCompleted })), (comp as unknown as { kpiWeight: number }).kpiWeight ?? 0)
+    const bonus = calcBonus(params, comp.targetBonusAnnual, kpiTasks.map(t => {
+      const tt = t as unknown as { taskType: string; completionPct: number | null; targetAmount: number | null; actualAmount: number | null }
+      let p = t.isCompleted ? 1 : 0
+      if (tt.taskType === "PERCENT") p = Math.min(1, (tt.completionPct ?? 0) / 100)
+      else if (tt.taskType === "AMOUNT" && (tt.targetAmount ?? 0) > 0) p = Math.min(1, (tt.actualAmount ?? 0) / tt.targetAmount!)
+      return { weight: t.weight, completionPct: p }
+    }), (comp as unknown as { kpiWeight: number }).kpiWeight ?? 0)
     const pct   = comp.targetBonusAnnual > 0 ? Math.round(bonus.total / comp.targetBonusAnnual * 100) : 0
     const kpiDone = kpiTasks.filter(t => t.isCompleted).length
     bonusRows.push([comp.user.name ?? comp.user.email ?? "?", comp.targetBonusAnnual, Math.round(bonus.total), pct, `${kpiDone}/${kpiTasks.length}`])

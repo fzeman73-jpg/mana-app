@@ -66,7 +66,13 @@ export default async function ReportsPage({
       const bonus = calcBonus(
         params,
         comp.targetBonusAnnual,
-        kpiTasks.map(t => ({ weight: t.weight, isCompleted: t.isCompleted })),
+        kpiTasks.map(t => {
+          const tt = t as unknown as { taskType: string; completionPct: number | null; targetAmount: number | null; actualAmount: number | null }
+          let pct = t.isCompleted ? 1 : 0
+          if (tt.taskType === "PERCENT") pct = Math.min(1, (tt.completionPct ?? 0) / 100)
+          else if (tt.taskType === "AMOUNT" && (tt.targetAmount ?? 0) > 0) pct = Math.min(1, (tt.actualAmount ?? 0) / tt.targetAmount!)
+          return { weight: t.weight, completionPct: pct }
+        }),
         (comp as unknown as { kpiWeight: number }).kpiWeight ?? 0
       )
 
