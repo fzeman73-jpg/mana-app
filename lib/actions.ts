@@ -296,57 +296,6 @@ export async function reopenQuarter(periodId: string, quarter: number, year: num
   revalidatePath("/")
 }
 
-// ─── POP – VESTING BASE ───────────────────────────────────────────────────────
-
-export async function upsertVestingBase(periodId: string, formData: FormData) {
-  const caller = await requireAdminOrManager()
-  const data = {
-    baseMultiplier: parseFloat(formData.get("baseMultiplier") as string) || 6.0,
-    currentEbitda:  parseFloat(formData.get("currentEbitda") as string)  || 0,
-  }
-  await prisma.vestingBase.upsert({
-    where:  { periodId },
-    update: data,
-    create: { periodId, ...data },
-  })
-  await audit(caller.email!, "UPDATE_VESTING_BASE", `Period:${periodId}`, undefined, data)
-  revalidatePath("/admin/parameters")
-  revalidatePath("/")
-}
-
-// ─── STRATEGICKÉ BOOSTERY ────────────────────────────────────────────────────
-
-export async function createBooster(periodId: string, formData: FormData) {
-  const caller = await requireAdminOrManager()
-  const data = {
-    periodId,
-    name:            formData.get("name") as string,
-    description:     (formData.get("description") as string) || undefined,
-    multiplierBoost: parseFloat(formData.get("multiplierBoost") as string) || 0,
-  }
-  await prisma.strategicBooster.create({ data })
-  await audit(caller.email!, "CREATE_BOOSTER", `Period:${periodId}`, undefined, data)
-  revalidatePath("/admin/parameters")
-}
-
-export async function toggleBooster(boosterId: string, current: boolean) {
-  const caller = await requireAdminOrManager()
-  await prisma.strategicBooster.update({
-    where: { id: boosterId },
-    data:  { isAchieved: !current, achievedAt: !current ? new Date() : null },
-  })
-  await audit(caller.email!, "TOGGLE_BOOSTER", `StrategicBooster:${boosterId}`, { isAchieved: current }, { isAchieved: !current })
-  revalidatePath("/admin/parameters")
-  revalidatePath("/")
-}
-
-export async function deleteBooster(boosterId: string) {
-  const caller = await requireAdminOrManager()
-  await audit(caller.email!, "DELETE_BOOSTER", `StrategicBooster:${boosterId}`)
-  await prisma.strategicBooster.delete({ where: { id: boosterId } })
-  revalidatePath("/admin/parameters")
-}
-
 // ─── ODMĚNA MANAŽERA ─────────────────────────────────────────────────────────
 
 export async function adminSetCompensation(userId: string, periodId: string, formData: FormData) {
@@ -377,55 +326,6 @@ export async function setUserPosition(userId: string, formData: FormData) {
   await audit(caller.email!, "SET_POSITION", `User:${userId}`, undefined, { position })
   revalidatePath(`/admin/user/${userId}`)
   revalidatePath("/admin/parameters")
-}
-
-// ─── PHANTOM GRANTY ───────────────────────────────────────────────────────────
-
-export async function adminAddPhantomGrant(userId: string, formData: FormData) {
-  const caller      = await requireAdmin()
-  const grantDateRaw = formData.get("grantDate") as string
-  const data = {
-    userId,
-    name:           formData.get("name") as string,
-    sharePercent:   parseFloat(formData.get("sharePercent") as string)   || 0,
-    grantEbitda:    parseFloat(formData.get("grantEbitda") as string)    || 0,
-    grantMultiplier: parseFloat(formData.get("grantMultiplier") as string) || 0,
-    grantDate:      grantDateRaw ? new Date(grantDateRaw) : new Date(),
-    vestingYears:   parseInt(formData.get("vestingYears") as string)     || 4,
-    vestingPercent: parseFloat(formData.get("vestingPercent") as string) || 25,
-  }
-  await (prisma as unknown as { phantomGrant: { create: (a: object) => Promise<unknown> } }).phantomGrant.create({ data })
-  await audit(caller.email!, "ADD_PHANTOM_GRANT", `User:${userId}`, undefined, { name: data.name })
-  revalidatePath("/admin/parameters")
-  revalidatePath("/")
-}
-
-export async function adminUpdatePhantomGrant(grantId: string, formData: FormData) {
-  const caller      = await requireAdmin()
-  const grantDateRaw = formData.get("grantDate") as string
-  const data = {
-    name:           formData.get("name") as string,
-    sharePercent:   parseFloat(formData.get("sharePercent") as string)   || 0,
-    grantEbitda:    parseFloat(formData.get("grantEbitda") as string)    || 0,
-    grantMultiplier: parseFloat(formData.get("grantMultiplier") as string) || 0,
-    grantDate:      grantDateRaw ? new Date(grantDateRaw) : new Date(),
-    vestingYears:   parseInt(formData.get("vestingYears") as string)     || 4,
-    vestingPercent: parseFloat(formData.get("vestingPercent") as string) || 25,
-  }
-  await (prisma as unknown as { phantomGrant: { update: (a: object) => Promise<unknown> } }).phantomGrant.update({
-    where: { id: grantId }, data,
-  })
-  await audit(caller.email!, "UPDATE_PHANTOM_GRANT", `PhantomGrant:${grantId}`, undefined, data)
-  revalidatePath("/admin/parameters")
-  revalidatePath("/")
-}
-
-export async function adminDeletePhantomGrant(grantId: string) {
-  const caller = await requireAdmin()
-  await audit(caller.email!, "DELETE_PHANTOM_GRANT", `PhantomGrant:${grantId}`)
-  await (prisma as unknown as { phantomGrant: { delete: (a: object) => Promise<unknown> } }).phantomGrant.delete({ where: { id: grantId } })
-  revalidatePath("/admin/parameters")
-  revalidatePath("/")
 }
 
 // ─── PŘEPSÁNÍ VÁHY PARAMETRU PER MANAŽER ─────────────────────────────────────

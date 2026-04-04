@@ -2,12 +2,15 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/db"
 import { redirect } from "next/navigation"
 import Image from "next/image"
-import { createPopPlan, deletePopPlan } from "@/lib/actions"
+import { createPopPlan } from "@/lib/actions"
+
+const fmt = (n: number) => Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(Math.round(n))
 
 type PopPlanRow = {
   id: string
   name: string
   description: string | null
+  grantEbitda: number
   baseMultiplier: number
   vestingYears: number
   vestingGranularity: string
@@ -67,8 +70,9 @@ export default async function PopAdminPage() {
                   <p className="text-[11px] text-gray-400 mt-0.5 truncate">{plan.description}</p>
                 )}
                 <div className="flex gap-3 mt-1.5 flex-wrap">
+                  {plan.grantEbitda > 0 && <span className="text-[10px] font-bold text-gray-500">EBITDA {fmt(plan.grantEbitda)}</span>}
                   <span className="text-[10px] font-bold text-gray-500">Základ ×{plan.baseMultiplier}</span>
-                  <span className="text-[10px] font-bold text-gray-500">Vesting {plan.vestingYears}r</span>
+                  <span className="text-[10px] font-bold text-gray-500">{plan.vestingGranularity === "YEARLY" ? `${plan.vestingYears} roků` : "kvartálně"}</span>
                   <span className="text-[10px] font-bold text-brand-cyan">{plan._count?.assignments ?? 0} lidí</span>
                   <span className="text-[10px] font-bold text-brand-pink">{plan._count?.boosters ?? 0} boosterů</span>
                 </div>

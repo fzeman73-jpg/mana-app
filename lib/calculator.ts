@@ -242,8 +242,3 @@ export function currentQuarter(): { quarter: number; year: number } {
   }
 }
 
-/** Počet let od data grantu (pro vesting) */
-export function yearsSinceDate(date: Date): number {
-  const now = new Date()
-  return now.getFullYear() - date.getFullYear()
-}
