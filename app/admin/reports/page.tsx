@@ -5,7 +5,7 @@ import { markVestingPaid, markVestingUnpaid } from "@/lib/actions"
 import Image from "next/image"
 import { redirect } from "next/navigation"
 
-const fmt  = (n: number) => Intl.NumberFormat('cs-CZ').format(Math.round(n))
+const fmt  = (n: number) => Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', maximumFractionDigits: 0 }).format(Math.round(n))
 const pct  = (n: number) => `${Math.round(n)}%`
 
 export default async function ReportsPage({
@@ -207,11 +207,11 @@ export default async function ReportsPage({
 
               {vestingBase ? (
                 <div className="mb-4 p-3 bg-gray-50 rounded-xl text-[10px] text-gray-500">
-                  Aktuální EBITDA: <span className="font-black text-gray-900">{fmt(vestingBase.currentEbitda)} CZK</span>
+                  Aktuální EBITDA: <span className="font-black text-gray-900">{fmt(vestingBase.currentEbitda)}</span>
                   &nbsp;·&nbsp; Základní koef.: <span className="font-black text-gray-900">{vestingBase.baseMultiplier}×</span>
                   &nbsp;·&nbsp; Boostery: <span className="font-black text-brand-green">+{boosters.filter(b => b.isAchieved).reduce((s, b) => s + b.multiplierBoost, 0).toFixed(1)}×</span>
                   &nbsp;·&nbsp; Celkový koef.: <span className="font-black text-brand-navy">{(vestingBase.baseMultiplier + boosters.filter(b => b.isAchieved).reduce((s, b) => s + b.multiplierBoost, 0)).toFixed(1)}×</span>
-                  &nbsp;·&nbsp; Hodnota firmy: <span className="font-black text-brand-navy">{fmt(vestingBase.currentEbitda * (vestingBase.baseMultiplier + boosters.filter(b => b.isAchieved).reduce((s, b) => s + b.multiplierBoost, 0)))} CZK</span>
+                  &nbsp;·&nbsp; Hodnota firmy: <span className="font-black text-brand-navy">{fmt(vestingBase.currentEbitda * (vestingBase.baseMultiplier + boosters.filter(b => b.isAchieved).reduce((s, b) => s + b.multiplierBoost, 0)))}</span>
                 </div>
               ) : (
                 <p className="text-sm text-gray-400 italic mb-4">Nejsou nastavena valuační data (VestingBase).</p>
@@ -239,25 +239,25 @@ export default async function ReportsPage({
                         </td>
                         <td className="py-4 px-4 text-right font-black text-brand-cyan">{comp.sharePercent}%</td>
                         <td className="py-4 px-4 text-right text-gray-500 text-[11px]">
-                          <p>{fmt(comp.grantEbitda)} CZK</p>
+                          <p>{fmt(comp.grantEbitda)}</p>
                           <p className="text-gray-400">{comp.grantMultiplier}×</p>
                         </td>
                         <td className="py-4 px-4 text-right text-gray-900 font-bold text-[11px]">
-                          {pop ? fmt(pop.currentFirmValue) : "—"} CZK
+                          {pop ? fmt(pop.currentFirmValue) : "—"}
                         </td>
                         <td className="py-4 px-4 text-right text-[11px]">
                           <span className={pop && pop.createdValue > 0 ? "text-brand-green font-black" : "text-gray-400"}>
-                            {pop ? fmt(pop.createdValue) : "—"} CZK
+                            {pop ? fmt(pop.createdValue) : "—"}
                           </span>
                         </td>
                         <td className="py-4 px-4 text-right">
                           <span className={`font-black text-base ${pop && pop.grossGain > 0 ? "text-brand-navy" : "text-gray-300"}`}>
-                            {pop ? fmt(pop.grossGain) : "—"} CZK
+                            {pop ? fmt(pop.grossGain) : "—"}
                           </span>
                         </td>
                         <td className="py-4 pl-4 text-right text-[11px]">
                           <span className="text-brand-cyan font-black">
-                            {pop ? fmt(pop.grossGain * ((vestingPercent ?? 25) / 100)) : "—"} CZK
+                            {pop ? fmt(pop.grossGain * ((vestingPercent ?? 25) / 100)) : "—"}
                           </span>
                         </td>
                       </tr>
@@ -267,8 +267,8 @@ export default async function ReportsPage({
                     <tr className="border-t-2 border-gray-200">
                       <td className="py-3 pr-4 text-[10px] font-black text-gray-500 uppercase">Celkem</td>
                       <td colSpan={4} />
-                      <td className="py-3 px-4 text-right font-black text-brand-navy text-base">{fmt(totalPopLiability)} CZK</td>
-                      <td className="py-3 pl-4 text-right font-black text-brand-cyan">{fmt(totalAnnualVesting)} CZK</td>
+                      <td className="py-3 px-4 text-right font-black text-brand-navy text-base">{fmt(totalPopLiability)}</td>
+                      <td className="py-3 pl-4 text-right font-black text-brand-cyan">{fmt(totalAnnualVesting)}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -296,8 +296,8 @@ export default async function ReportsPage({
                     {managerData.map(({ comp, bonus }) => (
                       <tr key={comp.id} className="hover:bg-gray-50 transition-colors">
                         <td className="py-4 pr-4 font-black text-gray-900">{comp.user.name ?? comp.user.email}</td>
-                        <td className="py-4 px-4 text-right text-gray-500">{fmt(comp.targetBonusAnnual)} CZK</td>
-                        <td className="py-4 px-4 text-right font-black text-gray-900">{fmt(bonus.total)} CZK</td>
+                        <td className="py-4 px-4 text-right text-gray-500">{fmt(comp.targetBonusAnnual)}</td>
+                        <td className="py-4 px-4 text-right font-black text-gray-900">{fmt(bonus.total)}</td>
                         <td className="py-4 px-4 text-right">
                           <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
                             comp.targetBonusAnnual > 0 && bonus.total / comp.targetBonusAnnual >= 0.9
@@ -343,7 +343,7 @@ export default async function ReportsPage({
                           <p className="text-[10px] text-gray-400">{comp.sharePercent}% · grant {new Date(comp.grantDate).toLocaleDateString('cs-CZ')} · {(comp as { vestingYears: number }).vestingYears ?? 4} let</p>
                         </div>
                         <span className={`text-[10px] font-black px-3 py-1 rounded-full ${pop && pop.grossGain > 0 ? "bg-brand-navy/10 text-brand-navy" : "bg-gray-100 text-gray-400"}`}>
-                          Celkem: {pop ? fmt(pop.grossGain) : "0"} CZK
+                          Celkem: {pop ? fmt(pop.grossGain) : "0"}
                         </span>
                       </div>
                       <div className="divide-y divide-gray-100">
@@ -357,12 +357,12 @@ export default async function ReportsPage({
                                 Rok {v.year}
                               </span>
                               <span className="text-[10px] text-gray-400 w-10">{v.percentage}%</span>
-                              <span className="font-black text-gray-900 flex-1">{fmt(v.amount)} CZK</span>
+                              <span className="font-black text-gray-900 flex-1">{fmt(v.amount)}</span>
                               {isPaid ? (
                                 <div className="flex items-center gap-3">
                                   <span className="text-[10px] font-black text-brand-green">
                                     ✓ Vyplaceno {payment?.paidAt ? new Date(payment.paidAt).toLocaleDateString('cs-CZ') : ""}
-                                    {payment?.amount ? ` · ${fmt(payment.amount)} CZK` : ""}
+                                    {payment?.amount ? ` · ${fmt(payment.amount)}` : ""}
                                   </span>
                                   <form action={markVestingUnpaid.bind(null, comp.id, v.year)}>
                                     <button className="text-[9px] font-black text-gray-400 hover:text-brand-pink transition-colors uppercase tracking-wider">
@@ -420,8 +420,8 @@ export default async function ReportsPage({
                         <tr key={s.id} className="hover:bg-gray-50">
                           <td className="py-3 pr-4 font-bold text-gray-900">{s.user.name ?? s.user.email}</td>
                           <td className="py-3 px-4 text-right text-gray-500">Q{s.quarter} {s.year}</td>
-                          <td className="py-3 px-4 text-right font-black text-gray-900">{fmt(s.bonusAmount)} CZK</td>
-                          <td className="py-3 pl-4 text-right text-brand-cyan font-black">{fmt(s.popValue)} CZK</td>
+                          <td className="py-3 px-4 text-right font-black text-gray-900">{fmt(s.bonusAmount)}</td>
+                          <td className="py-3 pl-4 text-right text-brand-cyan font-black">{fmt(s.popValue)}</td>
                         </tr>
                       ))}
                     </tbody>

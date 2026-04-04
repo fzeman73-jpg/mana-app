@@ -4,7 +4,7 @@ import { loginWithCredentials, adminToggleKpiTask, updateKpiTaskCompletion } fro
 import { calcBonus, calcPOP, calcVestingSchedule, yearsSinceDate, currentQuarter } from "@/lib/calculator"
 import Image from "next/image"
 
-const fmt = (n: number) => Intl.NumberFormat('cs-CZ').format(Math.round(n))
+const fmt = (n: number) => Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', maximumFractionDigits: 0 }).format(Math.round(n))
 const pct = (n: number) => `${Math.round(n * 100)}%`
 
 export default async function Home({
@@ -315,15 +315,15 @@ export default async function Home({
                     <div className="flex flex-col md:flex-row justify-between items-start gap-6">
                       <div>
                         <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.3em] mb-1">{a.popPlan.name}</p>
-                        <p className="text-3xl font-black text-white">{fmt(pop.grossGain)} CZK</p>
+                        <p className="text-3xl font-black text-white">{fmt(pop.grossGain)}</p>
                         <p className="text-white/30 text-xs font-bold mt-1">
                           Podíl {a.sharePercent}% · Grant {new Date(a.grantDate).getFullYear()}
                         </p>
                       </div>
                       <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-1.5 min-w-[200px]">
-                        <Row label="Hodnota firmy dnes" value={`${fmt(pop.currentFirmValue)} CZK`} light />
-                        <Row label="Hodnota při grantu" value={`${fmt(pop.grantFirmValue)} CZK`} light />
-                        <Row label="Vytvořená hodnota" value={`${fmt(pop.createdValue)} CZK`} accent />
+                        <Row label="Hodnota firmy dnes" value={`${fmt(pop.currentFirmValue)}`} light />
+                        <Row label="Hodnota při grantu" value={`${fmt(pop.grantFirmValue)}`} light />
+                        <Row label="Vytvořená hodnota" value={`${fmt(pop.createdValue)}`} accent />
                         <div className="pt-2 border-t border-white/10">
                           <Row label="Koeficient" value={`${pop.currentMultiplier.toFixed(1)}×`} light />
                           <Row label="z toho boostery" value={`+${pop.boosterTotal.toFixed(1)}×`} light />
@@ -374,8 +374,8 @@ export default async function Home({
                 <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
                   <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-4">Smluvní podmínky</h2>
                   <div className="space-y-2">
-                    <InfoRow label="Základní plat" value={`${fmt(compensation?.baseSalary ?? 0)} CZK / měs.`} />
-                    <InfoRow label="Roční cílový bonus" value={`${fmt(compensation?.targetBonusAnnual ?? 0)} CZK`} highlight />
+                    <InfoRow label="Základní plat" value={`${fmt(compensation?.baseSalary ?? 0)} / měs.`} />
+                    <InfoRow label="Roční cílový bonus" value={`${fmt(compensation?.targetBonusAnnual ?? 0)}`} highlight />
                     <InfoRow label="Podíl POP" value={`${compensation?.sharePercent}%`} />
                   </div>
                 </section>
@@ -391,7 +391,7 @@ export default async function Home({
                         <div className="mb-4 px-4 py-3 bg-brand-navy/5 rounded-2xl border border-brand-navy/10 flex justify-between items-center">
                           <div>
                             <p className="text-[9px] font-black text-brand-navy/50 uppercase tracking-widest">Příští splátka (rok {nextV.year})</p>
-                            <p className="font-black text-brand-navy text-lg">{fmt(nextV.amount)} CZK</p>
+                            <p className="font-black text-brand-navy text-lg">{fmt(nextV.amount)}</p>
                           </div>
                           <span className="text-2xl">📅</span>
                         </div>
@@ -405,14 +405,14 @@ export default async function Home({
                                 Rok {v.year} {v.isCurrent && "← nyní"} {paid && "✓"}
                               </span>
                               <span className={`font-black text-sm ${v.isCurrent ? "text-brand-cyan" : paid ? "text-brand-green" : "text-gray-700"}`}>
-                                {fmt(v.amount)} CZK
+                                {fmt(v.amount)}
                               </span>
                             </div>
                           )
                         })}
                       </div>
                       <p className="text-[10px] text-gray-400 mt-3 text-right">
-                        Celkem: {fmt(pop?.grossGain ?? 0)} CZK
+                        Celkem: {fmt(pop?.grossGain ?? 0)}
                       </p>
                     </section>
                   )
@@ -430,7 +430,7 @@ export default async function Home({
                     </h2>
                     <div className="text-right">
                       <p className="text-[9px] text-gray-400 uppercase tracking-wider">Projekce celkem</p>
-                      <p className="font-black text-xl text-brand-cyan">{fmt(bonusBreakdown.total)} CZK</p>
+                      <p className="font-black text-xl text-brand-cyan">{fmt(bonusBreakdown.total)}</p>
                     </div>
                   </div>
 
@@ -454,7 +454,7 @@ export default async function Home({
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="font-black text-base text-gray-900">{fmt(r.bonusAmount)} <span className="text-xs text-gray-400 font-normal">CZK</span></p>
+                              <p className="font-black text-base text-gray-900">{fmt(r.bonusAmount)}</p>
                               <p className="text-[10px] text-gray-400">{achPct}% plnění</p>
                             </div>
                           </div>
@@ -564,8 +564,8 @@ export default async function Home({
                         <div key={s.id} className="flex justify-between items-center px-4 py-3 bg-gray-50 rounded-xl border border-gray-200">
                           <span className="text-sm font-black text-gray-700">Q{s.quarter} {s.year}</span>
                           <div className="text-right">
-                            <p className="font-black text-gray-900 text-sm">{fmt(s.bonusAmount)} CZK <span className="text-gray-400 font-normal text-xs">bonus</span></p>
-                            <p className="text-[10px] text-gray-400">POP: {fmt(s.popValue)} CZK</p>
+                            <p className="font-black text-gray-900 text-sm">{fmt(s.bonusAmount)} <span className="text-gray-400 font-normal text-xs">bonus</span></p>
+                            <p className="text-[10px] text-gray-400">POP: {fmt(s.popValue)}</p>
                           </div>
                         </div>
                       ))}

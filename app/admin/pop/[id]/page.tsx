@@ -11,7 +11,7 @@ import {
 } from "@/lib/actions"
 import { calcPOP, calcVestingSchedule, yearsSinceDate } from "@/lib/calculator"
 
-const fmt = (n: number) => Intl.NumberFormat("cs-CZ").format(Math.round(n))
+const fmt = (n: number) => Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(Math.round(n))
 
 type PopBooster    = { id: string; name: string; description: string | null; multiplierBoost: number; isAchieved: boolean }
 type PopYearData   = { id: string; year: number; currentEbitda: number }
@@ -153,7 +153,7 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
               {plan.yearData.map(yd => (
                 <div key={yd.id} className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3">
                   <span className="font-black text-brand-cyan text-sm w-16">{yd.year}</span>
-                  <span className="flex-1 font-bold text-gray-900 text-sm">{fmt(yd.currentEbitda)} CZK</span>
+                  <span className="flex-1 font-bold text-gray-900 text-sm">{fmt(yd.currentEbitda)}</span>
                   <form action={deletePopYearData.bind(null, yd.id, plan.id)}>
                     <button type="submit" className="text-[9px] font-black text-gray-400 hover:text-brand-pink transition-colors uppercase tracking-widest px-2 py-1">
                       Smazat
@@ -273,7 +273,7 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
                   {pop && (
                     <div className="text-right flex-shrink-0">
                       <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black">Aktuální hodnota POP</p>
-                      <p className="font-black text-brand-cyan text-base">{fmt(pop.grossGain)} CZK</p>
+                      <p className="font-black text-brand-cyan text-base">{fmt(pop.grossGain)}</p>
                     </div>
                   )}
                 </div>
@@ -327,7 +327,7 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
                         return (
                           <div key={s.year} className="flex items-center gap-3 text-sm">
                             <span className="w-6 text-center font-black text-brand-cyan text-[10px]">R{s.year}</span>
-                            <span className="flex-1 font-bold text-gray-700">{fmt(s.amount)} CZK</span>
+                            <span className="flex-1 font-bold text-gray-700">{fmt(s.amount)}</span>
                             <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${
                               payment?.isPaid ? "bg-brand-green/10 text-brand-green" : "bg-gray-100 text-gray-400"
                             }`}>
