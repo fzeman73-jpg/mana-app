@@ -1,28 +1,36 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-navy:      #000747;
-  --color-brand-navy-card: #001464;
-  --color-brand-navy-deep: #00032d;
-  --color-brand-cyan:      #00ccff;
-  --color-brand-pink:      #ff1fa1;
-  --color-brand-green:     #47ff82;
+  /* ── Algotech brand colors ── */
+  --color-brand-navy:       #00073d;   /* algotech dark blue  */
+  --color-brand-navy-card:  #00104f;
+  --color-brand-navy-deep:  #00021f;
+  --color-brand-cyan:       #0079ff;   /* algotech azure blue */
+  --color-brand-pink:       #ff3366;   /* algotech hot pink   */
+  --color-brand-green:      #00bd9e;   /* algotech turquoise  */
+  --color-brand-blue-grey:  #7f839e;   /* algotech blue-grey  */
+  --color-brand-cool-white: #f0f3f7;   /* algotech cool white */
 }
 
 @theme inline {
   --color-background: #ffffff;
   --color-foreground: var(--color-brand-navy);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter), 'Inter', system-ui, sans-serif;
 }
 
 :root {
   --background: #ffffff;
-  --foreground: #000747;
+  --foreground: #00073d;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Poppins pro všechny tučné/display prvky */
+.font-black,
+.font-extrabold,
+.font-bold {
+  font-family: var(--font-poppins), 'Poppins', system-ui, sans-serif;
 }
