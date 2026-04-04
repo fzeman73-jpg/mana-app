@@ -83,7 +83,7 @@ export default async function Home({
         prisma.vestingBase.findUnique({ where: { periodId: period.id } }),
         prisma.strategicBooster.findMany({ where: { periodId: period.id }, orderBy: { name: "asc" } }),
         prisma.quarterlySnapshot.findMany({
-          where: { userId: dbUser.id },
+          where: { userId: dbUser.id, periodId: period.id },
           orderBy: [{ year: "asc" }, { quarter: "asc" }],
           take: 12,
         }),
@@ -154,15 +154,49 @@ export default async function Home({
     <div className="min-h-screen bg-gray-50 font-sans selection:bg-brand-cyan/20">
 
       {/* NAVBAR */}
-      <nav className="bg-white border-b border-gray-200 px-8 py-4 flex justify-between items-center sticky top-0 z-30 shadow-sm">
-        <div className="flex items-center gap-3">
-          <a href="/"><Image src="/algotech-logo.png" alt="Algotech" width={150} height={44} className="object-contain" /></a>
-          <span className="w-px h-6 bg-gray-200" />
-          {/* Výběr období */}
-          <div className="flex items-center gap-1.5">
+      <nav className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+        {/* Řádek 1: logo + navigace */}
+        <div className="px-4 sm:px-8 py-3 flex justify-between items-center">
+          <a href="/"><Image src="/algotech-logo.png" alt="Algotech" width={130} height={38} className="object-contain" /></a>
+          <div className="flex items-center gap-2 sm:gap-4">
+            {(isAdmin || isManager) && (
+              <a href="/admin/parameters" className="text-gray-400 hover:text-brand-cyan text-[10px] font-black uppercase tracking-widest transition-colors">
+                Parametry
+              </a>
+            )}
+            {isAdmin && (
+              <a href="/admin/reports" className="hidden sm:block text-gray-400 hover:text-brand-cyan text-[10px] font-black uppercase tracking-widest transition-colors">
+                Reporty
+              </a>
+            )}
+            {isAdmin && (
+              <a href="/admin" className="hidden sm:block bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/30 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-cyan hover:text-brand-navy transition-all">
+                Uživatelé
+              </a>
+            )}
+            <div className="flex items-center gap-2">
+              {session.user?.image && (
+                <img src={session.user.image} className="w-8 h-8 rounded-full ring-2 ring-brand-cyan/20 hidden sm:block" referrerPolicy="no-referrer" alt="" />
+              )}
+              <div className="leading-none text-right hidden sm:block">
+                <p className="text-xs font-black text-gray-900">{session.user?.name}</p>
+                <p className="text-[9px] text-gray-400 uppercase tracking-wider">{dbUser.role === "ADMIN" ? "Admin" : dbUser.role === "MANAGER" ? "Manažer" : "Viewer"}</p>
+              </div>
+            </div>
+            <a href="/settings" className="text-gray-400 hover:text-brand-cyan transition-colors text-[10px] font-black uppercase tracking-widest">
+              Nastavení
+            </a>
+            <form action={async () => { "use server"; await signOut() }}>
+              <button className="text-gray-400 hover:text-brand-pink transition-colors text-[10px] font-black uppercase tracking-widest">Odhlásit</button>
+            </form>
+          </div>
+        </div>
+        {/* Řádek 2: selektor období / roku / kvartálu */}
+        <div className="border-t border-gray-100 px-4 sm:px-8 py-2 overflow-x-auto">
+          <div className="flex items-center gap-1.5 min-w-max">
             {allPeriods.map(p => (
               <a key={p.id} href={`/?periodId=${p.id}&y=${nowY}&q=${nowQ}`}
-                className={`px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all border ${p.id === period?.id ? "bg-brand-cyan text-brand-navy border-brand-cyan" : "border-gray-200 text-gray-400 hover:border-brand-cyan hover:text-brand-cyan"}`}>
+                className={`px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all border whitespace-nowrap ${p.id === period?.id ? "bg-brand-cyan text-brand-navy border-brand-cyan" : "border-gray-200 text-gray-400 hover:border-brand-cyan hover:text-brand-cyan"}`}>
                 {p.name}
                 {p.isActive && <span className="ml-1 opacity-60">●</span>}
               </a>
@@ -170,56 +204,25 @@ export default async function Home({
             {allPeriods.length === 0 && (
               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Žádné aktivní období</span>
             )}
-          </div>
-          {period && (
-            <div className="flex items-center gap-1">
-              {availableYears.map(yr => (
-                <a key={yr} href={`/?periodId=${period.id}&y=${yr}&q=${yr === curY ? curQ : 1}`}
-                  className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all ${yr === curY ? "bg-brand-navy text-white" : "text-gray-400 hover:text-brand-navy"}`}>
-                  {yr}
-                </a>
-              ))}
-              <span className="w-px h-4 bg-gray-200 mx-1" />
-              {[1, 2, 3, 4].map(qn => (
-                <a key={qn} href={`/?periodId=${period.id}&y=${curY}&q=${qn}`}
-                  className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all ${qn === curQ ? "bg-brand-cyan text-brand-navy" : "text-gray-400 hover:text-brand-cyan"}`}>
-                  Q{qn}
-                </a>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-4">
-          {(isAdmin || isManager) && (
-            <a href="/admin/parameters" className="text-gray-400 hover:text-brand-cyan text-[10px] font-black uppercase tracking-widest transition-colors">
-              Parametry
-            </a>
-          )}
-          {isAdmin && (
-            <a href="/admin/reports" className="text-gray-400 hover:text-brand-cyan text-[10px] font-black uppercase tracking-widest transition-colors">
-              Reporty
-            </a>
-          )}
-          {isAdmin && (
-            <a href="/admin" className="bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/30 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-cyan hover:text-brand-navy transition-all">
-              Uživatelé
-            </a>
-          )}
-          <div className="hidden sm:flex items-center gap-3">
-            {session.user?.image && (
-              <img src={session.user.image} className="w-9 h-9 rounded-full ring-2 ring-brand-cyan/20" referrerPolicy="no-referrer" alt="" />
+            {period && (
+              <>
+                <span className="w-px h-4 bg-gray-200 mx-1 flex-shrink-0" />
+                {availableYears.map(yr => (
+                  <a key={yr} href={`/?periodId=${period.id}&y=${yr}&q=${yr === curY ? curQ : 1}`}
+                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all whitespace-nowrap ${yr === curY ? "bg-brand-navy text-white" : "text-gray-400 hover:text-brand-navy"}`}>
+                    {yr}
+                  </a>
+                ))}
+                <span className="w-px h-4 bg-gray-200 mx-1 flex-shrink-0" />
+                {[1, 2, 3, 4].map(qn => (
+                  <a key={qn} href={`/?periodId=${period.id}&y=${curY}&q=${qn}`}
+                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all whitespace-nowrap ${qn === curQ ? "bg-brand-cyan text-brand-navy" : "text-gray-400 hover:text-brand-cyan"}`}>
+                    Q{qn}
+                  </a>
+                ))}
+              </>
             )}
-            <div className="leading-none text-right">
-              <p className="text-xs font-black text-gray-900">{session.user?.name}</p>
-              <p className="text-[9px] text-gray-400 uppercase tracking-wider">{dbUser.role === "ADMIN" ? "Admin" : dbUser.role === "MANAGER" ? "Manažer" : "Viewer"}</p>
-            </div>
           </div>
-          <a href="/settings" className="text-gray-400 hover:text-brand-cyan transition-colors text-[10px] font-black uppercase tracking-widest">
-            Nastavení
-          </a>
-          <form action={async () => { "use server"; await signOut() }}>
-            <button className="text-gray-400 hover:text-brand-pink transition-colors text-[10px] font-black uppercase tracking-widest">Odhlásit</button>
-          </form>
         </div>
       </nav>
 
@@ -243,7 +246,10 @@ export default async function Home({
               <div className="relative z-10">
                 <div className="flex flex-col md:flex-row justify-between items-start gap-8">
                   <div>
-                    <p className="text-[10px] font-black text-brand-pink uppercase tracking-[0.4em] mb-2">Phantom Capital Gain</p>
+                    <div className="flex items-center gap-3 mb-2">
+                      <p className="text-[10px] font-black text-brand-pink uppercase tracking-[0.4em]">Phantom Capital Gain</p>
+                      <span className="text-[8px] font-black bg-brand-pink/20 text-brand-pink px-2 py-0.5 rounded-full uppercase tracking-widest border border-brand-pink/30">Průběžná projekce</span>
+                    </div>
                     <p className="text-7xl md:text-8xl font-black tracking-tighter text-white italic leading-none">
                       {fmt(popResult?.grossGain ?? 0)}
                     </p>
