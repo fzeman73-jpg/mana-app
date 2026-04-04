@@ -181,10 +181,7 @@ export default async function Home({
       compensation?.kpiWeight ?? 0
     )
     const hasData = inputs.some(p => p.actual > 0 || p.target > 0)
-    const achPct  = (compensation?.targetBonusAnnual ?? 0) > 0
-      ? Math.round(bonus.total / (compensation!.targetBonusAnnual / 4) * 100)
-      : 0
-    return { quarter: qn, bonus, snap, hasData, achPct }
+    return { quarter: qn, bonus, snap, hasData, inputs }
   })
 
   const yearBonusTotal = quarterCalcs.reduce((s, q) => s + (q.snap ? q.snap.bonusAmount : q.bonus.total), 0)
@@ -321,53 +318,87 @@ export default async function Home({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                {quarterCalcs.map(({ quarter: qn, bonus, snap, hasData }) => {
-                  const isCurrent = qn === curQ && curY === nowY
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {quarterCalcs.map(({ quarter: qn, bonus, snap, hasData, inputs: qInputs }) => {
+                  const isCurrent  = qn === curQ && curY === nowY
                   const isSelected = qn === curQ
-                  const isClosed = !!snap
+                  const isClosed   = !!snap
                   const displayBonus = isClosed ? snap!.bonusAmount : bonus.total
-                  const displayPct   = (compensation?.targetBonusAnnual ?? 0) > 0
-                    ? Math.round(displayBonus / (compensation!.targetBonusAnnual / 4) * 100)
-                    : 0
+                  const quarterTarget = (compensation?.targetBonusAnnual ?? 0) / 4
+                  const displayPct = quarterTarget > 0 ? Math.round(displayBonus / quarterTarget * 100) : 0
 
                   return (
                     <a key={qn} href={`/?periodId=${period!.id}&y=${curY}&q=${qn}`}
                       className={`block rounded-2xl border p-5 transition-all cursor-pointer ${
-                        isSelected
-                          ? "border-brand-cyan ring-2 ring-brand-cyan/20 bg-brand-cyan/5"
-                          : "border-gray-200 hover:border-gray-300"
-                      } ${isClosed ? "bg-gray-50" : ""}`}>
-                      <div className="flex items-center justify-between mb-3">
+                        isSelected ? "border-brand-cyan ring-2 ring-brand-cyan/20 bg-brand-cyan/5"
+                        : "border-gray-200 hover:border-gray-300"
+                      } ${isClosed && !isSelected ? "bg-gray-50" : ""}`}>
+
+                      {/* Hlavička */}
+                      <div className="flex items-center justify-between mb-4">
                         <span className={`text-sm font-black uppercase tracking-widest ${isSelected ? "text-brand-cyan" : "text-gray-500"}`}>
                           Q{qn} {curY}
                         </span>
                         <span className={`text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                          isClosed ? "bg-gray-200 text-gray-500" :
-                          isCurrent ? "bg-brand-cyan/15 text-brand-cyan" :
-                          "bg-gray-100 text-gray-400"
+                          isClosed   ? "bg-gray-200 text-gray-500" :
+                          isCurrent  ? "bg-brand-cyan/15 text-brand-cyan" :
+                                       "bg-gray-100 text-gray-400"
                         }`}>
                           {isClosed ? "Uzavřen" : isCurrent ? "Aktuální" : "Otevřen"}
                         </span>
                       </div>
+
+                      {/* Bonus */}
                       <p className={`text-2xl font-black ${isClosed ? "text-gray-700" : hasData ? "text-gray-900" : "text-gray-300"}`}>
                         {hasData || isClosed ? fmt(displayBonus) : "—"}
                       </p>
-                      {(hasData || isClosed) && (compensation?.targetBonusAnnual ?? 0) > 0 && (
+                      {quarterTarget > 0 && (
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          Cíl: <span className="font-black text-gray-600">{fmt(quarterTarget)}</span>
+                        </p>
+                      )}
+                      {(hasData || isClosed) && quarterTarget > 0 && (
                         <>
-                          <div className="mt-3 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${isClosed ? "bg-gray-400" : displayPct >= 100 ? "bg-brand-green" : "bg-brand-cyan"}`}
-                              style={{ width: `${Math.min(150, displayPct)}%` }}
-                            />
+                          <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full transition-all ${isClosed ? "bg-gray-400" : displayPct >= 100 ? "bg-brand-green" : "bg-brand-cyan"}`}
+                              style={{ width: `${Math.min(150, displayPct)}%` }} />
                           </div>
-                          <p className={`text-xs font-black mt-1.5 ${isClosed ? "text-gray-400" : displayPct >= 100 ? "text-brand-green" : "text-gray-500"}`}>
-                            {displayPct}% z kvartálního cíle
+                          <p className={`text-xs font-black mt-1 ${isClosed ? "text-gray-400" : displayPct >= 100 ? "text-brand-green" : "text-gray-500"}`}>
+                            {displayPct}% z cíle
                           </p>
                         </>
                       )}
+
+                      {/* Parametry */}
+                      {qInputs.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+                          {qInputs.map(p => {
+                            const ach = p.target > 0 ? Math.min(150, Math.round(p.actual / p.target * 100)) : null
+                            return (
+                              <div key={p.id} className="space-y-0.5">
+                                <div className="flex justify-between items-baseline">
+                                  <span className="text-xs font-black text-gray-600 truncate max-w-[60%]">{p.name}</span>
+                                  <span className={`text-xs font-black flex-shrink-0 ml-1 ${ach === null ? "text-gray-300" : ach >= 100 ? "text-brand-green" : ach > 0 ? "text-brand-cyan" : "text-gray-300"}`}>
+                                    {ach !== null ? `${ach}%` : "—"}
+                                  </span>
+                                </div>
+                                {(p.actual > 0 || p.target > 0) && (
+                                  <p className="text-[11px] text-gray-400">
+                                    {fmt(p.actual)} <span className="text-gray-300">/</span> {fmt(p.target)}
+                                  </p>
+                                )}
+                                <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full ${ach !== null && ach >= 100 ? "bg-brand-green" : "bg-brand-cyan/60"}`}
+                                    style={{ width: `${Math.min(100, ach ?? 0)}%` }} />
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+
                       {!hasData && !isClosed && (
-                        <p className="text-xs text-gray-300 mt-2">Výsledky nejsou zadány</p>
+                        <p className="text-xs text-gray-300 mt-3">Výsledky nejsou zadány</p>
                       )}
                     </a>
                   )
