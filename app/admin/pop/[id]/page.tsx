@@ -95,19 +95,51 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
 
         {/* NASTAVENÍ PLÁNU */}
         <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
-          <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-6">Nastavení plánu</h2>
+          <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-2">Nastavení plánu</h2>
+          <p className="text-xs text-gray-400 mb-6">
+            POP (Phantom Option Plan) odměňuje manažera za <span className="font-black text-gray-600">nárůst hodnoty firmy</span> od okamžiku vstupu do plánu.
+            Nárok na výplatu vzniká až po uplynutí vestingové doby — do té doby jsou všechna čísla pouze <span className="font-black text-gray-600">průběžnou projekcí</span>.
+          </p>
+
+          {/* Přehledová legenda */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6 p-4 bg-gray-50 border border-gray-200 rounded-2xl text-[11px] text-gray-500 leading-relaxed">
+            <div>
+              <p className="font-black text-gray-700 mb-1">Hodnota firmy při grantu</p>
+              <p>= Vstupní EBITDA × Základní multiplikátor</p>
+              <p className="text-brand-cyan font-black mt-1">
+                {plan.grantEbitda > 0 ? `${fmt(plan.grantEbitda)} × ${plan.baseMultiplier} = ${fmt(plan.grantEbitda * plan.baseMultiplier)}` : "—"}
+              </p>
+            </div>
+            <div>
+              <p className="font-black text-gray-700 mb-1">Aktuální hodnota firmy</p>
+              <p>= Aktuální EBITDA (z Ročních dat) × (Základní multiplikátor + Boostery)</p>
+              <p className="text-brand-cyan font-black mt-1">viz sekce Roční EBITDA níže</p>
+            </div>
+            <div>
+              <p className="font-black text-gray-700 mb-1">Hrubý zisk manažera</p>
+              <p>= (Aktuální − Grant) × Podíl %, ale pouze pokud je splněna podmínka min. růstu a uplynula vestingová doba</p>
+            </div>
+          </div>
+
           <form action={updatePopPlan.bind(null, plan.id)} className="space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input
-                name="name" required defaultValue={plan.name}
-                className="bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
-              />
-              <input
-                name="description" placeholder="Popis (volitelné)" defaultValue={plan.description ?? ""}
-                className="bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
-              />
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Název plánu</label>
+                <input
+                  name="name" required defaultValue={plan.name}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Popis (volitelné)</label>
+                <input
+                  name="description" placeholder="Krátký popis plánu" defaultValue={plan.description ?? ""}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900"
+                />
+              </div>
             </div>
-            {/* Řádek 1: EBITDA + multiplikátor + hurdle + frekvence */}
+
+            {/* Řádek 1: Hodnota firmy při grantu */}
             <div className="grid grid-cols-4 gap-3">
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Vstupní EBITDA (CZK)</label>
@@ -116,6 +148,7 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
                   className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
                 />
                 {plan.grantEbitda > 0 && <p className="text-[10px] text-gray-400 mt-1 ml-1">{fmt(plan.grantEbitda)}</p>}
+                <p className="text-[9px] text-gray-400 mt-0.5 ml-1">EBITDA firmy v době vzniku plánu — základ pro výpočet hodnoty firmy při grantu</p>
               </div>
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Základní multiplikátor</label>
@@ -123,6 +156,7 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
                   name="baseMultiplier" type="number" step="0.1" defaultValue={plan.baseMultiplier} required
                   className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
                 />
+                <p className="text-[9px] text-gray-400 mt-0.5 ml-1">Tržní násobek EBITDA pro ocenění firmy (např. 6× = firma se oceňuje na 6× EBITDA)</p>
               </div>
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Min. růst hodnoty (%)</label>
@@ -130,7 +164,9 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
                   name="minGrowthPercent" type="number" step="0.1" min="0" defaultValue={plan.minGrowthPercent}
                   className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
                 />
-                <p className="text-[9px] text-gray-400 mt-1 ml-1">0 = bez podmínky</p>
+                <p className="text-[9px] text-gray-400 mt-0.5 ml-1">
+                  Hurdle rate — pokud hodnota firmy nevzrostla alespoň o toto % oproti grantu, nárok je 0. Zadej 0 pro žádnou podmínku.
+                </p>
               </div>
               <div>
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Frekvence vyplácení</label>
@@ -141,9 +177,11 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
                   <option value="YEARLY">Ročně</option>
                   <option value="QUARTERLY">Čtvrtletně</option>
                 </select>
+                <p className="text-[9px] text-gray-400 mt-0.5 ml-1">Jak často se vyplácejí jednotlivé splátky po uplynutí vestingové doby</p>
               </div>
             </div>
-            {/* Řádek 2: dle frekvence */}
+
+            {/* Řádek 2: Vestingová doba */}
             {plan.vestingGranularity === "QUARTERLY" ? (
               <div className="grid grid-cols-2 gap-3 p-4 bg-brand-cyan/5 border border-brand-cyan/20 rounded-2xl">
                 <div>
@@ -162,31 +200,41 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-3 p-4 bg-brand-cyan/5 border border-brand-cyan/20 rounded-2xl">
-                <div>
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Počet let</label>
-                  <input
-                    name="vestingYears" type="number" min="1" max="10" defaultValue={plan.vestingYears} required
-                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Den vyplacení</label>
-                  <input
-                    name="vestingPaymentDay" type="number" min="1" max="28" defaultValue={plan.vestingPaymentDay} required
-                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Měsíc vyplacení</label>
-                  <select
-                    name="vestingPaymentMonth" defaultValue={plan.vestingPaymentMonth}
-                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
-                  >
-                    {["Leden","Únor","Březen","Duben","Květen","Červen","Červenec","Srpen","Září","Říjen","Listopad","Prosinec"].map((m, i) => (
-                      <option key={i+1} value={i+1}>{m}</option>
-                    ))}
-                  </select>
+              <div className="p-4 bg-brand-cyan/5 border border-brand-cyan/20 rounded-2xl space-y-3">
+                <p className="text-[10px] font-black text-brand-cyan uppercase tracking-widest">Vestingová doba a termíny vyplácení</p>
+                <p className="text-[11px] text-gray-500">
+                  Manažer získá nárok na výplatu až po uplynutí vestingové doby od data svého grantu (viz Přiřazení níže).
+                  Hrubý zisk se dělí rovnoměrně na roční splátky — každá splátka se vyplácí v zadaný den a měsíc roku po uplynutí příslušného roku vestingu.
+                </p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Délka vestingu (roky)</label>
+                    <input
+                      name="vestingYears" type="number" min="1" max="10" defaultValue={plan.vestingYears} required
+                      className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+                    />
+                    <p className="text-[9px] text-gray-400 mt-0.5 ml-1">Počet let od grantu, po které je výplata rozložena. Každý rok = 1 splátka ({plan.vestingYears > 0 ? Math.round(100/plan.vestingYears) : 0}% z celku)</p>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Den vyplacení</label>
+                    <input
+                      name="vestingPaymentDay" type="number" min="1" max="28" defaultValue={plan.vestingPaymentDay} required
+                      className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+                    />
+                    <p className="text-[9px] text-gray-400 mt-0.5 ml-1">Den v měsíci výplaty každé roční splátky</p>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5 ml-1">Měsíc vyplacení</label>
+                    <select
+                      name="vestingPaymentMonth" defaultValue={plan.vestingPaymentMonth}
+                      className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
+                    >
+                      {["Leden","Únor","Březen","Duben","Květen","Červen","Červenec","Srpen","Září","Říjen","Listopad","Prosinec"].map((m, i) => (
+                        <option key={i+1} value={i+1}>{m}</option>
+                      ))}
+                    </select>
+                    <p className="text-[9px] text-gray-400 mt-0.5 ml-1">Měsíc výplaty každé roční splátky (např. Květen = výplata 1.5. každého roku)</p>
+                  </div>
                 </div>
               </div>
             )}

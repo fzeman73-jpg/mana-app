@@ -468,7 +468,7 @@ export default async function Home({
                 <div className="relative z-10">
 
                   {/* Hlavička */}
-                  <div className="flex items-start justify-between mb-8 flex-wrap gap-4">
+                  <div className="flex items-start justify-between mb-4 flex-wrap gap-4">
                     <div>
                       <p className="text-sm font-black text-brand-pink uppercase tracking-[0.4em] mb-1">Phantom Option Plan</p>
                       <p className="text-5xl md:text-6xl font-black tracking-tighter text-white italic leading-none">
@@ -479,6 +479,12 @@ export default async function Home({
                     <span className="text-sm font-black bg-brand-pink/20 text-brand-pink px-4 py-2 rounded-full uppercase tracking-widest border border-brand-pink/30">
                       Průběžná projekce
                     </span>
+                  </div>
+                  {/* Vysvětlení */}
+                  <div className="mb-8 p-4 bg-white/5 border border-white/10 rounded-2xl text-xs text-white/40 leading-relaxed">
+                    POP odměňuje za <span className="text-white/70 font-black">nárůst hodnoty firmy</span> od tvého vstupu do plánu.
+                    Zobrazená čísla jsou <span className="text-white/70 font-black">průběžná projekce</span> — skutečný nárok vzniká až po uplynutí vestingové doby.
+                    Pokud není splněna podmínka minimálního růstu (hurdle rate), nárok je <span className="text-brand-pink font-black">0</span>.
                   </div>
 
                   {/* Per-plán */}
@@ -523,14 +529,22 @@ export default async function Home({
                                   <p className="text-xs text-brand-pink mt-1">Hurdle nesplněn — nárok je 0</p>
                                 )}
                               </div>
-                              <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-2 min-w-[220px]">
-                                <PopRow label="Hodnota firmy dnes" value={fmt(pop.currentFirmValue)} />
-                                <PopRow label="Hodnota při grantu"  value={fmt(pop.grantFirmValue)} />
-                                <PopRow label="Vytvořená hodnota"   value={fmt(pop.createdValue)} accent />
+                              <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-2 min-w-[240px]">
+                                <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-3">Jak se počítá</p>
+                                <PopRow label="Hodnota firmy dnes"   value={fmt(pop.currentFirmValue)} />
+                                <p className="text-[9px] text-white/25 -mt-1 ml-1">= Aktuální EBITDA × koeficient</p>
+                                <PopRow label="Hodnota při grantu"   value={fmt(pop.grantFirmValue)} />
+                                <p className="text-[9px] text-white/25 -mt-1 ml-1">= Vstupní EBITDA × multiplikátor (při vstupu)</p>
+                                <PopRow label="Vytvořená hodnota"    value={fmt(pop.createdValue)} accent />
+                                <p className="text-[9px] text-white/25 -mt-1 ml-1">= Dnes − Grant (základ pro výpočet nároku)</p>
                                 <div className="pt-2 border-t border-white/10">
-                                  <PopRow label="Koeficient"        value={`${pop.currentMultiplier.toFixed(1)}×`} />
-                                  <PopRow label="z toho boostery"   value={`+${pop.boosterTotal.toFixed(1)}×`} />
-                                  <PopRow label="Růst hodnoty"      value={`${Math.round(pop.growthPercent)}%`} />
+                                  <PopRow label="Koeficient dnes"    value={`${pop.currentMultiplier.toFixed(1)}×`} />
+                                  <p className="text-[9px] text-white/25 -mt-1 ml-1">= základ + splněné boostery</p>
+                                  <PopRow label="z toho boostery"    value={`+${pop.boosterTotal.toFixed(1)}×`} />
+                                  <PopRow label="Růst hodnoty"       value={`${Math.round(pop.growthPercent)}%`} />
+                                  {a.popPlan.minGrowthPercent > 0 && (
+                                    <p className="text-[9px] text-white/25 -mt-1 ml-1">min. požadováno: {a.popPlan.minGrowthPercent}%</p>
+                                  )}
                                 </div>
                               </div>
                             </div>
