@@ -62,7 +62,7 @@ export default async function Home({
   const isManager = dbUser.role === "MANAGER"
   const canEdit   = isAdmin || isManager
 
-  const { q, y, periodId: pidParam } = await searchParams
+  const { y, periodId: pidParam } = await searchParams
 
   const allPeriods = await prisma.period.findMany({ orderBy: { startDate: "desc" } })
   const period = pidParam
@@ -120,7 +120,7 @@ export default async function Home({
   })
 
   const { quarter: nowQ, year: nowY } = currentQuarter()
-  const curQ = q ? parseInt(q) : nowQ
+  const curQ = nowQ
   const curY = y ? parseInt(y) : nowY
 
   const availableYears: number[] = Array.from(new Set(perfParamsTyped.flatMap(p => p.results.map(r => r.year)))).sort()
@@ -132,17 +132,6 @@ export default async function Home({
   }).parameterWeight.findMany({ where: { userId: dbUser.id } }) : []
   const weightMap = new Map(weightOverrides.map(r => [r.parameterId, r.weight]))
 
-  // ── Výpočet bonusu pro vybraný kvartál ────────────────────────────────────
-  const paramInputs = perfParamsTyped.map(p => {
-    const res = p.results.find(r => r.quarter === curQ && r.year === curY)
-    return {
-      id: p.id, name: p.name,
-      weight: weightMap.get(p.id) ?? p.weight,
-      threshold: p.threshold, gatesParamId: p.gatesParamId,
-      actual: res?.actual ?? 0, target: res?.target ?? 0,
-    }
-  })
-
   type KpiTaskExt = { id: string; name: string; description: string | null; weight: number; isCompleted: boolean; taskType: string; completionPct: number | null; targetAmount: number | null; actualAmount: number | null }
   const kpiTasksExt = kpiTasks as unknown as KpiTaskExt[]
   const kpiNorm = kpiTasksExt.map(t => {
@@ -150,13 +139,6 @@ export default async function Home({
     if (t.taskType === "AMOUNT" && (t.targetAmount ?? 0) > 0) return Math.min(1, (t.actualAmount ?? 0) / t.targetAmount!)
     return t.isCompleted ? 1 : 0
   })
-
-  const bonusBreakdown = calcBonus(
-    paramInputs,
-    compensation?.targetBonusAnnual ?? 0,
-    kpiTasksExt.map((t, i) => ({ weight: t.weight, completionPct: kpiNorm[i] })),
-    compensation?.kpiWeight ?? 0
-  )
 
   const totalKpiW   = kpiTasksExt.reduce((s, t) => s + t.weight, 0)
   const weightedKpi = kpiTasksExt.reduce((s, t, i) => s + t.weight * kpiNorm[i], 0)
@@ -279,13 +261,6 @@ export default async function Home({
                     {yr}
                   </a>
                 ))}
-                <span className="w-px h-4 bg-gray-200 mx-1 flex-shrink-0" />
-                {[1, 2, 3, 4].map(qn => (
-                  <a key={qn} href={`/?periodId=${period.id}&y=${curY}&q=${qn}`}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all whitespace-nowrap ${qn === curQ ? "bg-brand-cyan text-brand-navy" : "text-gray-400 hover:text-brand-cyan"}`}>
-                    Q{qn}
-                  </a>
-                ))}
               </>
             )}
           </div>
@@ -320,23 +295,23 @@ export default async function Home({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {quarterCalcs.map(({ quarter: qn, bonus, snap, hasData, inputs: qInputs }) => {
-                  const isCurrent  = qn === curQ && curY === nowY
-                  const isSelected = qn === curQ
+                  const isCurrent  = qn === nowQ && curY === nowY
                   const isClosed   = !!snap
                   const displayBonus = isClosed ? snap!.bonusAmount : bonus.total
                   const quarterTarget = (compensation?.targetBonusAnnual ?? 0) / 4
                   const displayPct = quarterTarget > 0 ? Math.round(displayBonus / quarterTarget * 100) : 0
 
                   return (
-                    <a key={qn} href={`/?periodId=${period!.id}&y=${curY}&q=${qn}`}
-                      className={`block rounded-2xl border p-5 transition-all cursor-pointer ${
-                        isSelected ? "border-brand-cyan ring-2 ring-brand-cyan/20 bg-brand-cyan/5"
-                        : "border-gray-200 hover:border-gray-300"
-                      } ${isClosed && !isSelected ? "bg-gray-50" : ""}`}>
+                    <div key={qn}
+                      className={`rounded-2xl border p-5 ${
+                        isCurrent ? "border-brand-cyan ring-2 ring-brand-cyan/20 bg-brand-cyan/5"
+                        : isClosed ? "bg-gray-50 border-gray-200"
+                        : "border-gray-200"
+                      }`}>
 
                       {/* Hlavička */}
                       <div className="flex items-center justify-between mb-4">
-                        <span className={`text-sm font-black uppercase tracking-widest ${isSelected ? "text-brand-cyan" : "text-gray-500"}`}>
+                        <span className={`text-sm font-black uppercase tracking-widest ${isCurrent ? "text-brand-cyan" : "text-gray-500"}`}>
                           Q{qn} {curY}
                         </span>
                         <span className={`text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${
@@ -400,73 +375,14 @@ export default async function Home({
                       {!hasData && !isClosed && (
                         <p className="text-xs text-gray-300 mt-3">Výsledky nejsou zadány</p>
                       )}
-                    </a>
+                    </div>
                   )
                 })}
               </div>
             </section>
 
-            {/* ── BLOK 2: Detail kvartálu ───────────────────────────────────── */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-              {/* Výkonnostní parametry */}
-              <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-base font-black text-gray-900 uppercase tracking-widest">
-                    Parametry — Q{curQ} {curY}
-                  </h2>
-                  <div className="text-right">
-                    <p className="text-xs text-gray-400 uppercase tracking-wider">Projekce bonusu</p>
-                    <p className="font-black text-2xl text-brand-cyan">{fmt(bonusBreakdown.total)}</p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  {paramInputs.map(p => {
-                    const r = bonusBreakdown.parameters.find(r => r.id === p.id)
-                    if (!r) return null
-                    const achPct = Math.round(r.achievement * 100)
-                    return (
-                      <div key={p.id} className={`p-5 rounded-2xl border ${!r.thresholdMet ? "bg-brand-pink/5 border-brand-pink/20" : r.gated ? "bg-gray-50 border-gray-200 opacity-60" : "bg-gray-50 border-gray-200"}`}>
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <span className="font-black text-gray-900 text-base">{p.name}</span>
-                            <div className="flex gap-2 mt-1 flex-wrap">
-                              <span className="text-xs font-black bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">váha {p.weight}%</span>
-                              <span className={`text-xs font-black px-2 py-0.5 rounded-full ${!r.thresholdMet ? "bg-brand-pink/20 text-brand-pink" : "bg-gray-100 text-gray-400"}`}>
-                                bariéra {p.threshold}% {!r.thresholdMet ? "✗" : "✓"}
-                              </span>
-                              {r.gated && <span className="text-xs font-black bg-brand-pink/10 text-brand-pink px-2 py-0.5 rounded-full">nulováno</span>}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-black text-lg text-gray-900">{fmt(r.bonusAmount)}</p>
-                            <p className="text-xs text-gray-400">{achPct}% plnění</p>
-                          </div>
-                        </div>
-                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden mt-3">
-                          <div className={`h-full rounded-full transition-all ${!r.thresholdMet || r.gated ? "bg-brand-pink/50" : "bg-brand-cyan"}`}
-                            style={{ width: `${Math.min(100, achPct)}%` }} />
-                        </div>
-                        {p.actual > 0 || p.target > 0 ? (
-                          <div className="flex justify-between mt-2">
-                            <span className="text-xs text-gray-400">Skutečnost: <span className="font-black text-gray-600">{fmt(p.actual)}</span></span>
-                            <span className="text-xs text-gray-400">Cíl: <span className="font-black text-gray-600">{fmt(p.target)}</span></span>
-                          </div>
-                        ) : (
-                          <p className="text-xs text-gray-300 mt-2">Výsledky za Q{curQ} zatím nejsou zadány.</p>
-                        )}
-                      </div>
-                    )
-                  })}
-                  {paramInputs.length === 0 && (
-                    <p className="text-gray-400 text-sm italic text-center py-6">Parametry nejsou definovány.</p>
-                  )}
-                </div>
-              </section>
-
-              {/* KPI úkoly */}
-              <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+            {/* ── BLOK 2: KPI úkoly ────────────────────────────────────────── */}
+            <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="text-base font-black text-gray-900 uppercase tracking-widest">KPI Úkoly</h2>
                   <div className="text-right">
@@ -540,8 +456,7 @@ export default async function Home({
                     </div>
                   </>
                 )}
-              </section>
-            </div>
+            </section>
 
             {/* ── BLOK 3: POP (pouze pokud má přiřazen plán) ───────────────── */}
             {popCalcs.length > 0 && (
