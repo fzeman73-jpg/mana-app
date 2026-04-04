@@ -20,7 +20,10 @@ export default async function ParametersPage({
   searchParams: Promise<{ periodId?: string; userId?: string; tab?: string; year?: string }>
 }) {
   const session = await auth()
-  const caller  = await prisma.user.findUnique({ where: { email: session?.user?.email || "" } })
+  const caller  = await prisma.user.findUnique({
+    where:   { email: session?.user?.email || "" },
+    include: { division: true },
+  })
   if (caller?.role !== "ADMIN" && caller?.role !== "MANAGER") redirect("/")
   const isAdmin = caller?.role === "ADMIN"
 
@@ -86,6 +89,13 @@ export default async function ParametersPage({
               <span className="text-brand-pink">Parametry</span>
             </h1>
             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Firemní metriky · Odměny · POP</p>
+          </div>
+          <div className="w-px h-7 bg-gray-200" />
+          <div>
+            <p className="text-sm font-black text-gray-900">{caller?.name || caller?.email}</p>
+            <p className="text-[9px] font-black text-brand-cyan uppercase tracking-widest">
+              {(caller as { division?: { name: string } | null })?.division?.name ?? "Bez divize"}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
