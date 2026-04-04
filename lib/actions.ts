@@ -689,6 +689,7 @@ export async function markPopPaymentPaid(assignmentId: string, vestingYear: numb
   })
   await audit(caller.email!, "MARK_POP_PAYMENT_PAID", `PopAssignment:${assignmentId}`, undefined, { vestingYear, amount })
   revalidatePath("/admin/pop")
+  revalidatePath("/admin/reports")
   revalidatePath("/")
 }
 
@@ -697,6 +698,7 @@ export async function markPopPaymentUnpaid(assignmentId: string, vestingYear: nu
   await popPrisma().popPayment.deleteMany({ where: { assignmentId, vestingYear } })
   await audit(caller.email!, "MARK_POP_PAYMENT_UNPAID", `PopAssignment:${assignmentId}`, undefined, { vestingYear })
   revalidatePath("/admin/pop/" + planId)
+  revalidatePath("/admin/reports")
   revalidatePath("/")
 }
 
