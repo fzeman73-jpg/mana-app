@@ -51,7 +51,8 @@ export default async function ReportsPage({
   const curY = now.getFullYear()
 
   const periods = await prisma.period.findMany({ orderBy: { startDate: "desc" } })
-  const sel     = periods.find(p => p.id === periodId) ?? null
+  // Default to active period
+  const sel = periods.find(p => p.id === periodId) ?? periods.find(p => p.isActive) ?? null
 
   // ── POP: global, not period-scoped ──────────────────────────────────────────
   const rawAssignments = await castPrisma().popAssignment.findMany({
@@ -65,8 +66,8 @@ export default async function ReportsPage({
   const popAssignments = rawAssignments as PopAssignRec[]
 
   const popCalcs = popAssignments.map(a => {
-    const plan             = a.popPlan
-    const latestYearData   = plan.yearData.at(-1)
+    const plan           = a.popPlan
+    const latestYearData = plan.yearData.at(-1)
     const effectiveGrantEbitda = a.grantEbitda > 0 ? a.grantEbitda : plan.grantEbitda
     const pop = latestYearData ? calcPOP({
       sharePercent:     a.sharePercent,
@@ -93,7 +94,9 @@ export default async function ReportsPage({
   const totalPopLiability  = popCalcs.reduce((s, { pop }) => s + (pop?.grossGain ?? 0), 0)
   const totalAnnualVesting = popCalcs.reduce((s, { pop, vestingYears }) => s + (pop ? pop.grossGain / vestingYears : 0), 0)
 
-  // ── Bonus: period-scoped ─────────────────────────────────────────────────────
+  // ── Bonus: period-scoped, all 4 quarters ────────────────────────────────────
+  const periodYear = sel ? new Date(sel.startDate).getFullYear() : curY
+
   const [compensations, perfParams, snapshots] = sel ? await Promise.all([
     prisma.compensation.findMany({
       where:   { periodId: sel.id },
@@ -112,18 +115,31 @@ export default async function ReportsPage({
     }),
   ]) : [[], [], []]
 
-  const managerData = sel ? await Promise.all(
+  // Fetch per-manager extras once (reused for all 4 quarters)
+  const managerExtras = sel ? await Promise.all(
     compensations.map(async comp => {
-      const kpiTasks  = await prisma.kpiTask.findMany({ where: { userId: comp.userId, periodId: sel.id } })
-      const userDivId = comp.user.divisionId
+      const kpiTasks   = await prisma.kpiTask.findMany({ where: { userId: comp.userId, periodId: sel.id } })
       const weightRows = await castPrisma().parameterWeight.findMany({ where: { userId: comp.userId } })
       const weightMap  = new Map(weightRows.map((r: { parameterId: string; weight: number }) => [r.parameterId, r.weight]))
+      const kpiWeight  = (comp as unknown as { kpiWeight: number }).kpiWeight ?? 0
+      return { comp, kpiTasks, weightMap, kpiWeight }
+    })
+  ) : []
+
+  // Compute bonuses for Q1–Q4
+  const quarterData = [1, 2, 3, 4].map(q => {
+    const isCurrent = q === curQ && periodYear === curY
+    const isFuture  = periodYear > curY || (periodYear === curY && q > curQ)
+    const isClosed  = snapshots.some(s => s.quarter === q && s.year === periodYear)
+
+    const rows = managerExtras.map(({ comp, kpiTasks, weightMap, kpiWeight }) => {
+      const userDivId      = comp.user.divisionId
       const userPerfParams = perfParams.filter(p =>
         (p as unknown as { divisionId: string | null }).divisionId === null ||
         (p as unknown as { divisionId: string | null }).divisionId === userDivId
       )
       const params = userPerfParams.map(p => {
-        const res = p.results.find(r => r.quarter === curQ && r.year === curY)
+        const res = p.results.find(r => r.quarter === q && r.year === periodYear)
         return {
           id:           p.id,
           name:         p.name,
@@ -144,14 +160,17 @@ export default async function ReportsPage({
           else if (tt.taskType === "AMOUNT" && (tt.targetAmount ?? 0) > 0) cp = Math.min(1, (tt.actualAmount ?? 0) / tt.targetAmount!)
           return { weight: t.weight, completionPct: cp }
         }),
-        (comp as unknown as { kpiWeight: number }).kpiWeight ?? 0
+        kpiWeight
       )
-      return { comp, bonus }
+      const snapshot = snapshots.find(s => s.userId === comp.userId && s.quarter === q && s.year === periodYear)
+      return { comp, bonus, snapshot }
     })
-  ) : []
 
-  const totalBonusBudget     = managerData.reduce((s, m) => s + m.comp.targetBonusAnnual, 0)
-  const totalBonusCalculated = managerData.reduce((s, m) => s + m.bonus.total, 0)
+    return { quarter: q, year: periodYear, isClosed, isCurrent, isFuture, rows }
+  })
+
+  const totalBonusBudget   = managerExtras.reduce((s, m) => s + m.comp.targetBonusAnnual, 0)
+  const totalClosedBonuses = snapshots.reduce((s, sn) => s + sn.bonusAmount, 0)
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
@@ -179,9 +198,7 @@ export default async function ReportsPage({
 
         {/* Výběr období */}
         <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic">Časové období — Bonusy</h2>
-          </div>
+          <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-4">Časové období</h2>
           <div className="flex flex-wrap gap-3">
             {periods.map(p => (
               <a
@@ -203,123 +220,142 @@ export default async function ReportsPage({
 
         {sel && (
           <>
-            {/* Souhrnné KPI karty — bonusy */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* KPI karty + export */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div className="bg-white p-5 rounded-[2rem] border border-gray-100 shadow-sm">
-                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Bonus – cíl</p>
+                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Roční bonus – cíl</p>
                 <p className="text-2xl font-black text-gray-900">{fmt(totalBonusBudget)}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">cílová výše za období</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">součet cílových bonusů</p>
               </div>
-              <div className={`p-5 rounded-[2rem] border shadow-sm ${totalBonusCalculated >= totalBonusBudget * 0.9 ? "bg-brand-green/5 border-brand-green/20" : "bg-white border-gray-100"}`}>
-                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Bonus – vypočtený</p>
-                <p className={`text-2xl font-black ${totalBonusCalculated >= totalBonusBudget * 0.9 ? "text-brand-green" : "text-gray-900"}`}>{fmt(totalBonusCalculated)}</p>
+              <div className={`p-5 rounded-[2rem] border shadow-sm ${totalClosedBonuses > 0 ? "bg-brand-green/5 border-brand-green/20" : "bg-white border-gray-100"}`}>
+                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Vyplaceno (uzavřené Q)</p>
+                <p className={`text-2xl font-black ${totalClosedBonuses > 0 ? "text-brand-green" : "text-gray-900"}`}>{fmt(totalClosedBonuses)}</p>
                 <p className="text-[10px] text-gray-400 mt-0.5">
-                  {totalBonusBudget > 0 ? `${pct(totalBonusCalculated / totalBonusBudget * 100)} z cíle` : "—"}
+                  {snapshots.length > 0
+                    ? `${[...new Set(snapshots.map(s => s.quarter))].length} uzavřené kvartály`
+                    : "žádné uzavřené kvartály"}
                 </p>
               </div>
-            </div>
-
-            {/* Excel export */}
-            <div className="flex justify-end">
-              <a
-                href={`/admin/reports/export?periodId=${sel.id}`}
-                className="inline-flex items-center gap-2 bg-brand-navy text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-brand-pink transition-all active:scale-95"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                Export Excel
-              </a>
-            </div>
-
-            {/* Tabulka bonusů */}
-            <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-              <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-5">Bonusy — aktuální kvartál Q{curQ} {curY}</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-100">
-                      <th className="text-left py-3 pr-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Manažer</th>
-                      <th className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Cílový bonus</th>
-                      <th className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Vypočtený bonus</th>
-                      <th className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Plnění</th>
-                      {perfParams.map(p => (
-                        <th key={p.id} className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">{p.name}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {managerData.map(({ comp, bonus }) => (
-                      <tr key={comp.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="py-4 pr-4 font-black text-gray-900">{comp.user.name ?? comp.user.email}</td>
-                        <td className="py-4 px-4 text-right text-gray-500">{fmt(comp.targetBonusAnnual)}</td>
-                        <td className="py-4 px-4 text-right font-black text-gray-900">{fmt(bonus.total)}</td>
-                        <td className="py-4 px-4 text-right">
-                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                            comp.targetBonusAnnual > 0 && bonus.total / comp.targetBonusAnnual >= 0.9
-                              ? "bg-brand-green/10 text-brand-green"
-                              : "bg-brand-pink/10 text-brand-pink"
-                          }`}>
-                            {comp.targetBonusAnnual > 0 ? pct(bonus.total / comp.targetBonusAnnual * 100) : "—"}
-                          </span>
-                        </td>
-                        {perfParams.map(p => {
-                          const paramResult = bonus.parameters.find(r => r.id === p.id)
-                          return (
-                            <td key={p.id} className="py-4 px-4 text-right text-[11px]">
-                              {paramResult ? (
-                                <span className={!paramResult.thresholdMet || paramResult.gated ? "text-brand-pink" : "text-gray-700"}>
-                                  {pct(paramResult.achievement * 100)}
-                                  {!paramResult.thresholdMet && " ✗"}
-                                  {paramResult.gated && " ⊘"}
-                                </span>
-                              ) : "—"}
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="flex items-center justify-center md:justify-end col-span-2 md:col-span-1">
+                <a
+                  href={`/admin/reports/export?periodId=${sel.id}`}
+                  className="inline-flex items-center gap-2 bg-brand-navy text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-brand-pink transition-all active:scale-95"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                  Export Excel
+                </a>
               </div>
-            </section>
+            </div>
 
-            {/* Historie snapshots */}
-            {snapshots.length > 0 && (
-              <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-                <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-5">Historie uzavřených kvartálů</h2>
-                <div className="overflow-x-auto">
+            {/* Bonus tabulky — Q1–Q4 */}
+            {quarterData.map(qd => (
+              <section key={qd.quarter} className={`rounded-[2rem] border shadow-sm overflow-hidden ${qd.isClosed ? "bg-gray-50 border-gray-200" : "bg-white border-gray-100"}`}>
+                {/* Hlavička kvartálu */}
+                <div className={`px-6 py-4 border-b flex items-center gap-3 ${qd.isClosed ? "border-gray-200 bg-gray-100/60" : "border-gray-100"}`}>
+                  <h2 className="text-[11px] font-black uppercase tracking-[0.3em] italic text-gray-700">
+                    Bonusy — Q{qd.quarter} {qd.year}
+                  </h2>
+                  {qd.isClosed && (
+                    <span className="text-[8px] font-black px-2.5 py-1 rounded-full bg-brand-navy text-white uppercase tracking-widest">
+                      Uzavřen
+                    </span>
+                  )}
+                  {qd.isCurrent && !qd.isClosed && (
+                    <span className="text-[8px] font-black px-2.5 py-1 rounded-full bg-brand-cyan/20 text-brand-cyan uppercase tracking-widest">
+                      Aktuální
+                    </span>
+                  )}
+                  {qd.isFuture && !qd.isClosed && (
+                    <span className="text-[8px] font-black px-2.5 py-1 rounded-full bg-gray-200 text-gray-400 uppercase tracking-widest">
+                      Budoucí
+                    </span>
+                  )}
+                  {qd.isClosed && (
+                    <span className="text-[10px] text-gray-400 ml-auto">
+                      hodnoty ze snapshotu · živý výpočet v závorce
+                    </span>
+                  )}
+                </div>
+
+                <div className={`p-6 overflow-x-auto ${qd.isClosed ? "opacity-80" : ""}`}>
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100">
                         <th className="text-left py-3 pr-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Manažer</th>
-                        <th className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Kvartál</th>
-                        <th className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Bonus</th>
-                        <th className="text-right py-3 pl-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">POP hodnota</th>
+                        <th className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Cílový bonus</th>
+                        <th className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Vypočtený bonus</th>
+                        <th className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Plnění</th>
+                        {perfParams.map(p => (
+                          <th key={p.id} className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">{p.name}</th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                      {snapshots.map(s => (
-                        <tr key={s.id} className="hover:bg-gray-50">
-                          <td className="py-3 pr-4 font-bold text-gray-900">{s.user.name ?? s.user.email}</td>
-                          <td className="py-3 px-4 text-right text-gray-500">Q{s.quarter} {s.year}</td>
-                          <td className="py-3 px-4 text-right font-black text-gray-900">{fmt(s.bonusAmount)}</td>
-                          <td className="py-3 pl-4 text-right text-brand-cyan font-black">{fmt(s.popValue)}</td>
-                        </tr>
-                      ))}
+                      {qd.rows.map(({ comp, bonus, snapshot }) => {
+                        // For closed quarters, show snapshot values as primary, computed in parens
+                        const displayBonus = snapshot ? snapshot.bonusAmount : bonus.total
+                        const displayTarget = comp.targetBonusAnnual
+                        return (
+                          <tr key={comp.id} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="py-4 pr-4 font-black text-gray-900">{comp.user.name ?? comp.user.email}</td>
+                            <td className="py-4 px-4 text-right text-gray-500">{fmt(displayTarget)}</td>
+                            <td className="py-4 px-4 text-right">
+                              <span className="font-black text-gray-900">{fmt(displayBonus)}</span>
+                              {snapshot && Math.abs(snapshot.bonusAmount - bonus.total) > 1 && (
+                                <span className="text-[10px] text-gray-400 block">live: {fmt(bonus.total)}</span>
+                              )}
+                            </td>
+                            <td className="py-4 px-4 text-right">
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                displayTarget > 0 && displayBonus / displayTarget >= 0.9
+                                  ? "bg-brand-green/10 text-brand-green"
+                                  : "bg-brand-pink/10 text-brand-pink"
+                              }`}>
+                                {displayTarget > 0 ? pct(displayBonus / displayTarget * 100) : "—"}
+                              </span>
+                            </td>
+                            {perfParams.map(p => {
+                              const paramResult = bonus.parameters.find(r => r.id === p.id)
+                              return (
+                                <td key={p.id} className="py-4 px-4 text-right text-[11px]">
+                                  {paramResult ? (
+                                    <span className={!paramResult.thresholdMet || paramResult.gated ? "text-brand-pink" : "text-gray-700"}>
+                                      {pct(paramResult.achievement * 100)}
+                                      {!paramResult.thresholdMet && " ✗"}
+                                      {paramResult.gated && " ⊘"}
+                                    </span>
+                                  ) : "—"}
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        )
+                      })}
                     </tbody>
+                    <tfoot>
+                      <tr className="border-t border-gray-200">
+                        <td className="py-2 pr-4 text-[9px] font-black text-gray-400 uppercase">Celkem Q{qd.quarter}</td>
+                        <td className="py-2 px-4 text-right text-[11px] text-gray-400">{fmt(qd.rows.reduce((s, r) => s + r.comp.targetBonusAnnual, 0))}</td>
+                        <td className="py-2 px-4 text-right font-black text-brand-navy">
+                          {fmt(qd.rows.reduce((s, r) => s + (r.snapshot ? r.snapshot.bonusAmount : r.bonus.total), 0))}
+                        </td>
+                        <td colSpan={1 + perfParams.length} />
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               </section>
-            )}
+            ))}
           </>
         )}
 
-        {!sel && periods.length > 0 && (
+        {!sel && (
           <div className="bg-white p-12 rounded-[2rem] border border-gray-100 shadow-sm text-center">
-            <p className="text-gray-400 text-sm">Vyberte časové období pro zobrazení bonusů.</p>
+            <p className="text-gray-400 text-sm">Žádná časová období nejsou nastavena.</p>
           </div>
         )}
 
-        {/* ── POP SEKCE — vždy zobrazena, nezávislá na období ───────────────── */}
+        {/* ── POP SEKCE ─────────────────────────────────────────────────────── */}
         <div className="flex items-center gap-4 pt-2">
           <div className="flex-1 h-px bg-gray-200" />
           <div className="flex items-center gap-2 px-4 py-2 bg-brand-navy rounded-full">
