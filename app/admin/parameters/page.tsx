@@ -107,11 +107,12 @@ export default async function ParametersPage({
           </div>
           <div className="flex items-center gap-4 sm:gap-6">
             {sel && (
-              <>
-                <a href={href({ tab: "firma" })} className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${tab === "firma" ? "bg-brand-cyan text-brand-navy" : "text-gray-400 hover:text-brand-cyan"}`}>Firma</a>
-                <a href={href({ tab: "manageri" })} className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${tab === "manageri" ? "bg-brand-cyan text-brand-navy" : "text-gray-400 hover:text-brand-cyan"}`}>Manažeři</a>
-              </>
+              <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
+                <a href={href({ tab: "firma" })} className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${tab === "firma" ? "bg-white text-brand-cyan shadow-sm" : "text-gray-400 hover:text-brand-cyan"}`}>Firma</a>
+                <a href={href({ tab: "manageri" })} className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${tab === "manageri" ? "bg-white text-brand-cyan shadow-sm" : "text-gray-400 hover:text-brand-cyan"}`}>Manažeři</a>
+              </div>
             )}
+            <div className="w-px h-5 bg-gray-200 hidden sm:block" />
             <a href="/admin/reports" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Reporty</a>
             <a href="/admin/pop" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">POP</a>
             <a href="/admin" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Uživatelé</a>
