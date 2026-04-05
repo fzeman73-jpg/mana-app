@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db"
 import {
   createPeriod, deletePeriod, setActivePeriod,
   createPerformanceParameter, updatePerformanceParameter, deletePerformanceParameter,
-  upsertQuarterlyResult, lockQuarter, unlockQuarter,
+  upsertQuarterlyResult, lockQuarter,
   adminSetCompensation, adminAddKpiTask, adminDeleteKpiTask, adminToggleKpiTask, updateKpiTaskCompletion,
   setParameterWeight, resetParameterWeight,
   upsertPopAssignment, deletePopAssignment,
@@ -272,9 +272,9 @@ export default async function ParametersPage({
                                       {r.lockedByEmail && <p className="text-[8px] text-gray-300 mt-1">{r.lockedByEmail}</p>}
                                     </div>
                                     {isAdmin && (
-                                      <form action={unlockQuarter.bind(null, p.id, q, curY)}>
+                                      <form action={reopenQuarter.bind(null, sel.id, q, curY)}>
                                         <button type="submit" className="w-full bg-brand-pink/10 text-brand-pink border border-brand-pink/30 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider hover:bg-brand-pink hover:text-white transition-all">
-                                          🔓 Odemknout
+                                          🔓 Odemknout kvartál
                                         </button>
                                       </form>
                                     )}
