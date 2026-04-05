@@ -378,7 +378,7 @@ export async function resetParameterWeight(userId: string, parameterId: string) 
 // ─── KPI ÚKOLY ────────────────────────────────────────────────────────────────
 
 export async function adminAddKpiTask(userId: string, periodId: string, quarter: number, formData: FormData) {
-  const caller   = await requireAdmin()
+  const caller   = await requireAdminOrManager()
   const taskType = (formData.get("taskType") as string) || "BOOLEAN"
   const data = {
     name:             formData.get("name") as string,
@@ -414,7 +414,7 @@ export async function updateKpiTaskCompletion(taskId: string, formData: FormData
 }
 
 export async function adminDeleteKpiTask(taskId: string) {
-  const caller = await requireAdmin()
+  const caller = await requireAdminOrManager()
   await audit(caller.email!, "DELETE_KPI_TASK", `KpiTask:${taskId}`)
   await prisma.kpiTask.delete({ where: { id: taskId } })
   revalidatePath("/admin/parameters")

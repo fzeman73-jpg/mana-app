@@ -242,7 +242,7 @@ export default async function Home({
             <p className="font-black text-gray-400 text-base uppercase tracking-widest">
               {!period ? "Není aktivní žádné období." : "Vaše odměna zatím není nastavena."}
             </p>
-            {isAdmin && <a href="/admin/parameters?tab=manageri" className="inline-block mt-6 bg-brand-cyan text-brand-navy px-8 py-3 rounded-2xl font-black uppercase text-sm tracking-widest hover:bg-brand-pink hover:text-white transition-all">Nastavit parametry →</a>}
+            {(isAdmin || isManager) && <a href="/admin/parameters?tab=manageri" className="inline-block mt-6 bg-brand-cyan text-brand-navy px-8 py-3 rounded-2xl font-black uppercase text-sm tracking-widest hover:bg-brand-pink hover:text-white transition-all">Nastavit parametry →</a>}
           </div>
         ) : (
           <>

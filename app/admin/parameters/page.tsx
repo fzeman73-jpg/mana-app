@@ -26,9 +26,13 @@ export default async function ParametersPage({
     include: { division: true },
   })
   if (caller?.role !== "ADMIN" && caller?.role !== "MANAGER") redirect("/")
-  const isAdmin = caller?.role === "ADMIN"
+  const isAdmin   = caller?.role === "ADMIN"
+  const isManager = caller?.role === "MANAGER"
 
-  const { periodId, userId, tab = "firma", year } = await searchParams
+  // Manager vidí pouze tab Manažeři
+  const { periodId, userId, year } = await searchParams
+  const rawTab = (await searchParams).tab
+  const tab = isManager ? "manageri" : (rawTab ?? "firma")
 
   const [periods, users, divisions] = await Promise.all([
     prisma.period.findMany({ orderBy: { startDate: "desc" } }),
@@ -106,7 +110,7 @@ export default async function ParametersPage({
             </div>
           </div>
           <div className="flex items-center gap-4 sm:gap-6">
-            {sel && (
+            {sel && !isManager && (
               <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
                 <a href={href({ tab: "firma" })} className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${tab === "firma" ? "bg-white text-brand-cyan shadow-sm" : "text-gray-400 hover:text-brand-cyan"}`}>Firma</a>
                 <a href={href({ tab: "manageri" })} className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${tab === "manageri" ? "bg-white text-brand-cyan shadow-sm" : "text-gray-400 hover:text-brand-cyan"}`}>Manažeři</a>
@@ -169,7 +173,7 @@ export default async function ParametersPage({
         </section>
 
         {/* ── TAB: FIRMA ─────────────────────────────────────────────────── */}
-        {sel && tab === "firma" && (
+        {sel && tab === "firma" && isAdmin && (
           <>
 
             {/* Výkonnostní parametry */}
