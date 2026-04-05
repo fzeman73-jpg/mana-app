@@ -229,7 +229,7 @@ export default async function Home({
             {allPeriods.length === 0 && (
               <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Žádné aktivní období</span>
             )}
-            {period && (
+            {period && availableYears.length > 1 && (
               <>
                 <span className="w-px h-4 bg-gray-200 mx-1 flex-shrink-0" />
                 {availableYears.map(yr => (
