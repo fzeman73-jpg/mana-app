@@ -5,7 +5,6 @@ import {
   createPerformanceParameter, updatePerformanceParameter, deletePerformanceParameter,
   upsertQuarterlyResult, lockQuarter, unlockQuarter,
   adminSetCompensation, adminAddKpiTask, adminDeleteKpiTask, adminToggleKpiTask, updateKpiTaskCompletion,
-  setParameterWeight, resetParameterWeight,
   upsertPopAssignment, deletePopAssignment,
   closeQuarter, reopenQuarter,
 } from "@/lib/actions"
@@ -566,7 +565,6 @@ export default async function ParametersPage({
                     const totalOverride = managerParams.reduce((s, p) => s + (weightMap.get(p.id) ?? p.weight), 0)
                     const kpiW = compensation?.kpiWeight ?? 0
                     const grandTotal = totalOverride + kpiW
-                    const hasAnyOverride = managerParams.some(p => weightMap.has(p.id))
                     return (
                       <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
                         <div className="flex items-start justify-between mb-4">
@@ -585,12 +583,9 @@ export default async function ParametersPage({
                         </div>
                         <div className="space-y-2">
                           {managerParams.map(p => {
-                            const globalW   = p.weight
-                            const overrideW = weightMap.get(p.id)
-                            const effective = overrideW ?? globalW
-                            const isDiv     = !!p.divisionId
+                            const isDiv = !!p.divisionId
                             return (
-                              <div key={p.id} className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${overrideW !== undefined ? "bg-brand-cyan/5 border-brand-cyan/20" : "bg-gray-50 border-gray-200"}`}>
+                              <div key={p.id} className="flex items-center gap-3 px-4 py-3 rounded-xl border bg-gray-50 border-gray-200">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2">
                                     <span className="font-black text-sm text-gray-900 truncate">{p.name}</span>
@@ -598,36 +593,17 @@ export default async function ParametersPage({
                                       {isDiv ? "divize" : "firemní"}
                                     </span>
                                   </div>
-                                  <span className="text-[10px] text-gray-400">
-                                    Globální: {globalW}%
-                                    {overrideW !== undefined && <span className="text-brand-cyan font-black"> → přepsáno na {overrideW}%</span>}
-                                  </span>
                                 </div>
-                                <form action={setParameterWeight.bind(null, selU.id, p.id)} className="flex items-center gap-2">
-                                  <input name="weight" type="number" step="0.1" min="0" max="100"
-                                    defaultValue={effective}
-                                    className="w-20 bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold text-gray-900 outline-none focus:border-brand-cyan text-center" />
-                                  <span className="text-[10px] text-gray-400">%</span>
-                                  <button type="submit" className="text-[9px] font-black px-3 py-1.5 rounded-xl bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan hover:text-brand-navy transition-all border border-brand-cyan/20">
-                                    Uložit
-                                  </button>
-                                </form>
-                                {overrideW !== undefined && (
-                                  <form action={resetParameterWeight.bind(null, selU.id, p.id)}>
-                                    <button type="submit" className="text-[9px] font-black text-gray-300 hover:text-brand-pink transition-colors px-2 py-1.5" title="Obnovit globální váhu">
-                                      ↺
-                                    </button>
-                                  </form>
-                                )}
+                                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-brand-cyan/10 text-brand-cyan">
+                                  váha {p.weight}%
+                                </span>
+                                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                                  bariéra {p.threshold}%
+                                </span>
                               </div>
                             )
                           })}
                         </div>
-                        {hasAnyOverride && Math.abs(totalOverride - 100) > 0.1 && (
-                          <p className="text-[10px] text-brand-pink font-black mt-3 text-right">
-                            Váhy nesumují na 100 % — bonus bude vypočten s neúplnou škálou
-                          </p>
-                        )}
                       </section>
                     )
                   })()}
