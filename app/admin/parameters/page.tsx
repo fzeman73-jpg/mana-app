@@ -252,61 +252,68 @@ export default async function ParametersPage({
                         {[1, 2, 3, 4].map(q => {
                           const r = p.results.find(r => r.quarter === q && r.year === curY)
                           const qAch = r && r.target > 0 ? Math.min(1.5, r.actual / r.target) : null
-                          return (
-                            <form key={q} action={upsertQuarterlyResult.bind(null, p.id, q, curY)}>
-                              <div className={`rounded-xl border p-3 ${r?.isLocked ? "bg-gray-50 border-gray-200" : "border-gray-200 hover:border-brand-cyan/40"}`}>
-                                <div className="flex items-center justify-between mb-2">
-                                  <span className="text-[9px] font-black text-gray-500 uppercase">Q{q}</span>
-                                  {qAch !== null && (
-                                    <span className={`text-[9px] font-black ${qAch >= p.threshold / 100 ? "text-brand-green" : "text-brand-pink"}`}>
-                                      {Math.round(qAch * 100)}%
-                                    </span>
+                          const qHeader = (
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-[9px] font-black text-gray-500 uppercase">Q{q}</span>
+                              {qAch !== null && (
+                                <span className={`text-[9px] font-black ${qAch >= p.threshold / 100 ? "text-brand-green" : "text-brand-pink"}`}>
+                                  {Math.round(qAch * 100)}%
+                                </span>
+                              )}
+                            </div>
+                          )
+                          if (r?.isLocked) {
+                            return (
+                              <div key={q} className="rounded-xl border p-3 bg-gray-50 border-gray-200">
+                                {qHeader}
+                                <div className="space-y-2">
+                                  <div className="bg-brand-green/10 border border-brand-green/30 rounded-xl px-3 py-2">
+                                    <p className="text-[8px] font-black text-brand-green uppercase tracking-widest mb-1">🔒 Uzavřeno</p>
+                                    <p className="text-xs font-black text-gray-900">{fmt(r.actual)}</p>
+                                    <p className="text-[9px] text-gray-400">cíl: {fmt(r.target)}</p>
+                                    {r.lockedByEmail && <p className="text-[8px] text-gray-300 mt-1">{r.lockedByEmail}</p>}
+                                  </div>
+                                  {isAdmin && (
+                                    <form action={reopenQuarter.bind(null, sel.id, q, curY)}>
+                                      <button type="submit" className="w-full bg-brand-pink/10 text-brand-pink border border-brand-pink/30 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider hover:bg-brand-pink hover:text-white transition-all">
+                                        🔓 Odemknout kvartál
+                                      </button>
+                                    </form>
                                   )}
                                 </div>
-                                {r?.isLocked ? (
-                                  <div className="space-y-2">
-                                    <div className="bg-brand-green/10 border border-brand-green/30 rounded-xl px-3 py-2">
-                                      <p className="text-[8px] font-black text-brand-green uppercase tracking-widest mb-1">🔒 Uzavřeno</p>
-                                      <p className="text-xs font-black text-gray-900">{fmt(r.actual)}</p>
-                                      <p className="text-[9px] text-gray-400">cíl: {fmt(r.target)}</p>
-                                      {r.lockedByEmail && <p className="text-[8px] text-gray-300 mt-1">{r.lockedByEmail}</p>}
-                                    </div>
+                              </div>
+                            )
+                          }
+                          return (
+                            <form key={q} action={upsertQuarterlyResult.bind(null, p.id, q, curY)}>
+                              <div className="rounded-xl border p-3 border-gray-200 hover:border-brand-cyan/40">
+                                {qHeader}
+                                <div className="space-y-1.5">
+                                  <div>
+                                    <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Skutečnost</p>
+                                    <input name="actual" type="number" defaultValue={r?.actual ?? 0} step="any"
+                                      className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-bold text-gray-900 outline-none focus:border-brand-cyan" />
+                                    <p className="text-[9px] text-gray-400 mt-0.5">{fmt(r?.actual ?? 0)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Cíl</p>
+                                    <input name="target" type="number" defaultValue={r?.target ?? 0} step="any"
+                                      className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-bold text-gray-900 outline-none focus:border-brand-cyan" />
+                                    <p className="text-[9px] text-gray-400 mt-0.5">{fmt(r?.target ?? 0)}</p>
+                                  </div>
+                                  <input name="note" placeholder="Poznámka" defaultValue={r?.note ?? ""}
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-[10px] text-gray-600 outline-none focus:border-brand-cyan" />
+                                  <div className="flex gap-1">
+                                    <button type="submit" className="flex-1 bg-brand-cyan text-brand-navy py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-brand-pink hover:text-white transition-all">Uložit</button>
                                     {isAdmin && (
-                                      <form action={reopenQuarter.bind(null, sel.id, q, curY)}>
-                                        <button type="submit" className="w-full bg-brand-pink/10 text-brand-pink border border-brand-pink/30 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider hover:bg-brand-pink hover:text-white transition-all">
-                                          🔓 Odemknout kvartál
+                                      <form action={lockQuarter.bind(null, p.id, q, curY)}>
+                                        <button type="submit" className="bg-brand-navy/10 text-brand-navy border border-brand-navy/20 px-3 py-1.5 rounded-lg text-[9px] font-black hover:bg-brand-navy hover:text-white transition-all" title="Uzavřít kvartál">
+                                          🔒
                                         </button>
                                       </form>
                                     )}
                                   </div>
-                                ) : (
-                                  <div className="space-y-1.5">
-                                    <div>
-                                      <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Skutečnost</p>
-                                      <input name="actual" type="number" defaultValue={r?.actual ?? 0} step="any"
-                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-bold text-gray-900 outline-none focus:border-brand-cyan" />
-                                      <p className="text-[9px] text-gray-400 mt-0.5">{fmt(r?.actual ?? 0)}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Cíl</p>
-                                      <input name="target" type="number" defaultValue={r?.target ?? 0} step="any"
-                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-bold text-gray-900 outline-none focus:border-brand-cyan" />
-                                      <p className="text-[9px] text-gray-400 mt-0.5">{fmt(r?.target ?? 0)}</p>
-                                    </div>
-                                    <input name="note" placeholder="Poznámka" defaultValue={r?.note ?? ""}
-                                      className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-[10px] text-gray-600 outline-none focus:border-brand-cyan" />
-                                    <div className="flex gap-1">
-                                      <button type="submit" className="flex-1 bg-brand-cyan text-brand-navy py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-brand-pink hover:text-white transition-all">Uložit</button>
-                                      {isAdmin && (
-                                        <form action={lockQuarter.bind(null, p.id, q, curY)}>
-                                          <button type="submit" className="bg-brand-navy/10 text-brand-navy border border-brand-navy/20 px-3 py-1.5 rounded-lg text-[9px] font-black hover:bg-brand-navy hover:text-white transition-all" title="Uzavřít kvartál">
-                                            🔒
-                                          </button>
-                                        </form>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
+                                </div>
                               </div>
                             </form>
                           )
