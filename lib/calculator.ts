@@ -119,20 +119,13 @@ export function calcBonus(
     }
   })
 
-  // 2. Gating – projdi parametry a označ gated
-  for (const p of parameters) {
-    if (!p.gatesParamId) continue
-    const thisResult = results.find(r => r.id === p.id)
-    if (!thisResult || thisResult.thresholdMet) continue
-    // Tento parametr nesplnil threshold → gated cílový parametr
-    const gatedResult = results.find(r => r.id === p.gatesParamId)
-    if (gatedResult) gatedResult.gated = true
-  }
+  // 2. Pokud JAKÝKOLIV parametr nesplní threshold → všechny výkonnostní parametry jsou 0
+  const anyFailed = results.some(r => !r.thresholdMet)
 
   // 3. Výpočet bonusu parametrů
   let total = 0
   for (const r of results) {
-    if (!r.thresholdMet || r.gated) {
+    if (anyFailed || !r.thresholdMet) {
       r.bonusAmount = 0
     } else {
       r.bonusAmount = targetBonusAnnual * (r.weight / 100) * r.achievement
