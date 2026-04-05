@@ -35,9 +35,7 @@ export default async function AdminPage({
     const hdrs  = await headers()
     const host  = hdrs.get("host") ?? "localhost:3000"
     const proto = hdrs.get("x-forwarded-proto") ?? "http"
-    const invitedUser = await (prisma as unknown as {
-      user: { findUnique: (a: object) => Promise<{ name: string | null; inviteToken: string | null } | null> }
-    }).user.findUnique({ where: { id: invited }, select: { name: true, inviteToken: true } })
+    const invitedUser = await prisma.user.findUnique({ where: { id: invited }, select: { name: true, inviteToken: true } })
     if (invitedUser?.inviteToken) {
       inviteLink  = `${proto}://${host}/invite/${invitedUser.inviteToken}`
       invitedName = invitedUser.name

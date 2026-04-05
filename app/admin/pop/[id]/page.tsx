@@ -39,9 +39,7 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
 
   const { id } = await params
 
-  const pp = prisma as unknown as { popPlan: { findUnique: (a: object) => Promise<PopPlanFull | null> } }
-
-  const plan = await pp.popPlan.findUnique({
+  const plan = await prisma.popPlan.findUnique({
     where:   { id },
     include: {
       boosters:    { orderBy: { name: "asc" } },

@@ -5,9 +5,7 @@ import Image from "next/image"
 export default async function InvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
 
-  const user = await (prisma as unknown as {
-    user: { findFirst: (a: object) => Promise<{ name: string | null; email: string | null; inviteTokenExpiry: Date | null } | null> }
-  }).user.findFirst({
+  const user = await prisma.user.findFirst({
     where: { inviteToken: token },
     select: { name: true, email: true, inviteTokenExpiry: true },
   })

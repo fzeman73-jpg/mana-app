@@ -12,9 +12,7 @@ import { calcBonus, calcPOP } from "@/lib/calculator"
 
 /** Načte mapu parameterId → přepsaná váha pro daného uživatele */
 async function loadWeightOverrides(userId: string): Promise<Map<string, number>> {
-  const rows = await (prisma as unknown as {
-    parameterWeight: { findMany: (a: object) => Promise<{ parameterId: string; weight: number }[]> }
-  }).parameterWeight.findMany({ where: { userId } })
+  const rows = await prisma.parameterWeight.findMany({ where: { userId } })
   return new Map(rows.map(r => [r.parameterId, r.weight]))
 }
 
@@ -71,15 +69,7 @@ export async function inviteUser(formData: FormData) {
   const inviteToken       = randomBytes(32).toString("hex")
   const inviteTokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 dní
 
-  const inviteUserPrisma = prisma as unknown as {
-    user: {
-      upsert: (a: object) => Promise<{ id: string }>
-      findFirst: (a: object) => Promise<{ id: string } | null>
-      update: (a: object) => Promise<unknown>
-    }
-  }
-
-  const user = await inviteUserPrisma.user.upsert({
+  const user = await prisma.user.upsert({
     where:  { email },
     update: { isAllowed: true, inviteToken, inviteTokenExpiry },
     create: { email, name, isAllowed: true, role: "USER", inviteToken, inviteTokenExpiry },
@@ -93,14 +83,7 @@ export async function setPasswordFromInvite(token: string, formData: FormData) {
   const password = formData.get("password") as string
   if (!password || password.length < 8) throw new Error("Heslo musí mít alespoň 8 znaků")
 
-  const invitePrisma = prisma as unknown as {
-    user: {
-      findFirst: (a: object) => Promise<{ id: string } | null>
-      update: (a: object) => Promise<unknown>
-    }
-  }
-
-  const user = await invitePrisma.user.findFirst({
+  const user = await prisma.user.findFirst({
     where: {
       inviteToken: token,
       inviteTokenExpiry: { gt: new Date() },
@@ -109,7 +92,7 @@ export async function setPasswordFromInvite(token: string, formData: FormData) {
   if (!user) throw new Error("Pozvánka je neplatná nebo vypršela")
 
   const hashed = await bcrypt.hash(password, 10)
-  await invitePrisma.user.update({
+  await prisma.user.update({
     where: { id: user.id },
     data:  { password: hashed, inviteToken: null, inviteTokenExpiry: null },
   })
@@ -145,7 +128,7 @@ export async function setUserRole(userId: string, formData: FormData) {
 export async function setUserPassword(userId: string, formData: FormData) {
   const caller = await requireAdmin()
   const password = formData.get("password") as string
-  if (!password || password.length < 6) throw new Error("Heslo musí mít alespoň 6 znaků")
+  if (!password || password.length < 8) throw new Error("Heslo musí mít alespoň 8 znaků")
   const hashed = await bcrypt.hash(password, 12)
   await prisma.user.update({ where: { id: userId }, data: { password: hashed } })
   await audit(caller.email!, "SET_PASSWORD", `User:${userId}`)
@@ -164,7 +147,7 @@ export async function changeOwnPassword(
     const password = formData.get("password")  as string
     const confirm  = formData.get("confirm")   as string
 
-    if (!password || password.length < 6) return { error: "Nové heslo musí mít alespoň 6 znaků" }
+    if (!password || password.length < 8) return { error: "Nové heslo musí mít alespoň 8 znaků" }
     if (password !== confirm) return { error: "Hesla se neshodují" }
 
     if (caller.password) {
@@ -326,7 +309,7 @@ export async function unlockQuarter(parameterId: string, quarter: number, year: 
 /** Znovu otevře kvartál – smaže snapshot a odemkne všechny výsledky v daném období */
 export async function reopenQuarter(periodId: string, quarter: number, year: number) {
   const caller = await requireAdmin()
-  await (prisma as unknown as { quarterlySnapshot: { deleteMany: (a: object) => Promise<unknown> } }).quarterlySnapshot.deleteMany({ where: { periodId, quarter, year } })
+  await prisma.quarterlySnapshot.deleteMany({ where: { periodId, quarter, year } })
   await prisma.quarterlyResult.updateMany({
     where: { parameter: { periodId }, quarter, year },
     data:  { isLocked: false, lockedAt: null, lockedByEmail: null },
@@ -374,7 +357,7 @@ export async function setParameterWeight(userId: string, parameterId: string, fo
   const caller = await requireAdmin()
   const weight = parseFloat(formData.get("weight") as string)
   if (isNaN(weight) || weight < 0) throw new Error("Neplatná váha")
-  await (prisma as unknown as { parameterWeight: { upsert: (a: object) => Promise<unknown> } }).parameterWeight.upsert({
+  await prisma.parameterWeight.upsert({
     where:  { userId_parameterId: { userId, parameterId } },
     create: { userId, parameterId, weight },
     update: { weight },
@@ -386,9 +369,7 @@ export async function setParameterWeight(userId: string, parameterId: string, fo
 
 export async function resetParameterWeight(userId: string, parameterId: string) {
   const caller = await requireAdmin()
-  await (prisma as unknown as { parameterWeight: { deleteMany: (a: object) => Promise<unknown> } }).parameterWeight.deleteMany({
-    where: { userId, parameterId },
-  })
+  await prisma.parameterWeight.deleteMany({ where: { userId, parameterId } })
   await audit(caller.email!, "RESET_PARAMETER_WEIGHT", `User:${userId}`, undefined, { parameterId })
   revalidatePath("/admin/parameters")
   revalidatePath("/")
@@ -457,7 +438,7 @@ export async function adminToggleKpiTask(taskId: string, current: boolean) {
 export async function closeQuarter(periodId: string, quarter: number, year: number) {
   const caller = await requireAdmin()
 
-  const [users, perfParams, vestingBase, boosters] = await Promise.all([
+  const [users, perfParams] = await Promise.all([
     prisma.compensation.findMany({
       where:   { periodId },
       include: { user: true },
@@ -466,8 +447,6 @@ export async function closeQuarter(periodId: string, quarter: number, year: numb
       where:   { periodId },
       include: { results: { where: { quarter, year } } },
     }),
-    prisma.vestingBase.findUnique({ where: { periodId } }),
-    prisma.strategicBooster.findMany({ where: { periodId } }),
   ])
 
   for (const comp of users) {
@@ -478,10 +457,7 @@ export async function closeQuarter(periodId: string, quarter: number, year: numb
     // Výpočet bonusu — filtr parametrů dle divize + přepsání vah
     const userDivId   = comp.user.divisionId
     const weightMap   = await loadWeightOverrides(comp.userId)
-    const userParams  = perfParams.filter((p: typeof perfParams[number]) => {
-      const pd = (p as unknown as { divisionId: string | null }).divisionId
-      return pd === null || pd === userDivId
-    })
+    const userParams  = perfParams.filter(p => p.divisionId === null || p.divisionId === userDivId)
     const paramInputs = userParams.map(p => {
       const res = p.results[0]
       return {
@@ -497,38 +473,47 @@ export async function closeQuarter(periodId: string, quarter: number, year: numb
       paramInputs,
       comp.targetBonusAnnual,
       kpiTasks.map(t => {
-        const tt = t as unknown as { taskType: string; completionPct: number | null; targetAmount: number | null; actualAmount: number | null }
-        let pct = t.isCompleted ? 1 : 0
-        if (tt.taskType === "PERCENT") pct = Math.min(1, (tt.completionPct ?? 0) / 100)
-        else if (tt.taskType === "AMOUNT" && (tt.targetAmount ?? 0) > 0) pct = Math.min(1, (tt.actualAmount ?? 0) / tt.targetAmount!)
-        return { weight: t.weight, completionPct: pct }
+        let cp = t.isCompleted ? 1 : 0
+        if (t.taskType === "PERCENT") cp = Math.min(1, (t.completionPct ?? 0) / 100)
+        else if (t.taskType === "AMOUNT" && (t.targetAmount ?? 0) > 0) cp = Math.min(1, (t.actualAmount ?? 0) / t.targetAmount!)
+        return { weight: t.weight, completionPct: cp }
       }),
-      (comp as unknown as { kpiWeight: number }).kpiWeight ?? 0
+      comp.kpiWeight ?? 0
     )
 
-    // Výpočet POP
-    const pop = vestingBase ? calcPOP({
-      sharePercent:     comp.sharePercent,
-      grantEbitda:      comp.grantEbitda,
-      grantMultiplier:  comp.grantMultiplier,
-      currentEbitda:    vestingBase.currentEbitda,
-      baseMultiplier:   vestingBase.baseMultiplier,
-      boosters:         boosters.map((b: { multiplierBoost: number; isAchieved: boolean }) => ({ multiplierBoost: b.multiplierBoost, isAchieved: b.isAchieved })),
-      minGrowthPercent: 0,
-    }) : null
+    // Výpočet POP — nový systém: součet PopAssignment pro tohoto uživatele
+    const popAssignments = await prisma.popAssignment.findMany({
+      where:   { userId: comp.userId },
+      include: { popPlan: { include: { boosters: true, yearData: { orderBy: { year: "asc" } } } } },
+    })
+    const totalPopGrossGain = popAssignments.reduce((sum, a) => {
+      const latestYearData = a.popPlan.yearData.at(-1)
+      if (!latestYearData) return sum
+      const effectiveGrantEbitda = a.grantEbitda > 0 ? a.grantEbitda : a.popPlan.grantEbitda
+      const pop = calcPOP({
+        sharePercent:     a.sharePercent,
+        grantEbitda:      effectiveGrantEbitda,
+        grantMultiplier:  a.popPlan.baseMultiplier,
+        currentEbitda:    latestYearData.currentEbitda,
+        baseMultiplier:   a.popPlan.baseMultiplier,
+        boosters:         a.popPlan.boosters,
+        minGrowthPercent: a.popPlan.minGrowthPercent,
+      })
+      return sum + pop.grossGain
+    }, 0)
 
     // Uložení snapshotu
     await prisma.quarterlySnapshot.upsert({
       where:  { userId_periodId_quarter_year: { userId: comp.userId, periodId, quarter, year } },
       update: {
         bonusAmount: bonus.total,
-        popValue:    pop?.grossGain ?? 0,
+        popValue:    totalPopGrossGain,
         breakdown:   bonus as object,
       },
       create: {
         userId: comp.userId, periodId, quarter, year,
         bonusAmount: bonus.total,
-        popValue:    pop?.grossGain ?? 0,
+        popValue:    totalPopGrossGain,
         breakdown:   bonus as object,
       },
     })
@@ -552,42 +537,6 @@ export async function closeQuarter(periodId: string, quarter: number, year: numb
 
 // ─── POP PLÁN ─────────────────────────────────────────────────────────────────
 
-type PopPlanModel = {
-  create: (a: object) => Promise<{ id: string }>
-  update: (a: object) => Promise<unknown>
-  delete: (a: object) => Promise<unknown>
-  findMany: (a: object) => Promise<unknown[]>
-  findUnique: (a: object) => Promise<unknown>
-}
-type PopPlanBoosterModel = {
-  create: (a: object) => Promise<unknown>
-  update: (a: object) => Promise<unknown>
-  delete: (a: object) => Promise<unknown>
-}
-type PopYearDataModel = {
-  upsert: (a: object) => Promise<unknown>
-  delete: (a: object) => Promise<unknown>
-}
-type PopAssignmentModel = {
-  upsert: (a: object) => Promise<unknown>
-  delete: (a: object) => Promise<unknown>
-  findMany: (a: object) => Promise<unknown[]>
-}
-type PopPaymentModel = {
-  upsert: (a: object) => Promise<unknown>
-  deleteMany: (a: object) => Promise<unknown>
-}
-
-function popPrisma() {
-  return prisma as unknown as {
-    popPlan:        PopPlanModel
-    popPlanBooster: PopPlanBoosterModel
-    popYearData:    PopYearDataModel
-    popAssignment:  PopAssignmentModel
-    popPayment:     PopPaymentModel
-  }
-}
-
 export async function createPopPlan(formData: FormData) {
   const caller = await requireAdmin()
   const data = {
@@ -602,7 +551,7 @@ export async function createPopPlan(formData: FormData) {
     vestingQuarters:    parseInt(formData.get("vestingQuarters") as string) || 16,
     minGrowthPercent:   parseFloat(formData.get("minGrowthPercent") as string) || 0,
   }
-  const plan = await popPrisma().popPlan.create({ data })
+  const plan = await prisma.popPlan.create({ data })
   await audit(caller.email!, "CREATE_POP_PLAN", `PopPlan:${plan.id}`, undefined, data)
   revalidatePath("/admin/pop")
   redirect("/admin/pop/" + plan.id)
@@ -622,7 +571,7 @@ export async function updatePopPlan(planId: string, formData: FormData) {
     vestingQuarters:    parseInt(formData.get("vestingQuarters") as string) || 16,
     minGrowthPercent:   parseFloat(formData.get("minGrowthPercent") as string) || 0,
   }
-  await popPrisma().popPlan.update({ where: { id: planId }, data })
+  await prisma.popPlan.update({ where: { id: planId }, data })
   await audit(caller.email!, "UPDATE_POP_PLAN", `PopPlan:${planId}`, undefined, data)
   revalidatePath("/admin/pop")
   revalidatePath("/admin/pop/" + planId)
@@ -631,7 +580,7 @@ export async function updatePopPlan(planId: string, formData: FormData) {
 export async function deletePopPlan(planId: string) {
   const caller = await requireAdmin()
   await audit(caller.email!, "DELETE_POP_PLAN", `PopPlan:${planId}`)
-  await popPrisma().popPlan.delete({ where: { id: planId } })
+  await prisma.popPlan.delete({ where: { id: planId } })
   revalidatePath("/admin/pop")
   redirect("/admin/pop")
 }
@@ -644,7 +593,7 @@ export async function createPopBooster(planId: string, formData: FormData) {
     description:     (formData.get("description") as string) || undefined,
     multiplierBoost: parseFloat(formData.get("multiplierBoost") as string) || 0,
   }
-  await popPrisma().popPlanBooster.create({ data })
+  await prisma.popPlanBooster.create({ data })
   await audit(caller.email!, "CREATE_POP_BOOSTER", `PopPlan:${planId}`, undefined, data)
   revalidatePath("/admin/pop/" + planId)
   revalidatePath("/")
@@ -652,7 +601,7 @@ export async function createPopBooster(planId: string, formData: FormData) {
 
 export async function togglePopBooster(boosterId: string, current: boolean, planId: string) {
   const caller = await requireAdminOrManager()
-  await popPrisma().popPlanBooster.update({
+  await prisma.popPlanBooster.update({
     where: { id: boosterId },
     data: { isAchieved: !current, achievedAt: !current ? new Date() : null },
   })
@@ -664,7 +613,7 @@ export async function togglePopBooster(boosterId: string, current: boolean, plan
 export async function deletePopBooster(boosterId: string, planId: string) {
   const caller = await requireAdmin()
   await audit(caller.email!, "DELETE_POP_BOOSTER", `PopPlanBooster:${boosterId}`)
-  await popPrisma().popPlanBooster.delete({ where: { id: boosterId } })
+  await prisma.popPlanBooster.delete({ where: { id: boosterId } })
   revalidatePath("/admin/pop/" + planId)
   revalidatePath("/")
 }
@@ -673,7 +622,7 @@ export async function upsertPopYearData(planId: string, formData: FormData) {
   const caller = await requireAdmin()
   const year          = parseInt(formData.get("year") as string)
   const currentEbitda = parseFloat(formData.get("currentEbitda") as string) || 0
-  await popPrisma().popYearData.upsert({
+  await prisma.popYearData.upsert({
     where:  { popPlanId_year: { popPlanId: planId, year } },
     update: { currentEbitda },
     create: { popPlanId: planId, year, currentEbitda },
@@ -685,7 +634,7 @@ export async function upsertPopYearData(planId: string, formData: FormData) {
 
 export async function deletePopYearData(yearDataId: string, planId: string) {
   const caller = await requireAdmin()
-  await popPrisma().popYearData.delete({ where: { id: yearDataId } })
+  await prisma.popYearData.delete({ where: { id: yearDataId } })
   await audit(caller.email!, "DELETE_POP_YEAR", `PopPlan:${planId}`)
   revalidatePath("/admin/pop/" + planId)
 }
@@ -699,7 +648,7 @@ export async function upsertPopAssignment(planId: string, formData: FormData) {
     grantDate:    grantDateRaw ? new Date(grantDateRaw) : new Date(),
     grantEbitda:  parseFloat(formData.get("grantEbitda") as string) || 0,
   }
-  await popPrisma().popAssignment.upsert({
+  await prisma.popAssignment.upsert({
     where:  { userId_popPlanId: { userId, popPlanId: planId } },
     update: data,
     create: { userId, popPlanId: planId, ...data },
@@ -713,7 +662,7 @@ export async function upsertPopAssignment(planId: string, formData: FormData) {
 export async function deletePopAssignment(assignmentId: string, planId: string) {
   const caller = await requireAdmin()
   await audit(caller.email!, "DELETE_POP_ASSIGNMENT", `PopAssignment:${assignmentId}`)
-  await popPrisma().popAssignment.delete({ where: { id: assignmentId } })
+  await prisma.popAssignment.delete({ where: { id: assignmentId } })
   revalidatePath("/admin/pop/" + planId)
   revalidatePath("/admin/parameters")
   revalidatePath("/")
@@ -722,7 +671,7 @@ export async function deletePopAssignment(assignmentId: string, planId: string) 
 export async function markPopPaymentPaid(assignmentId: string, vestingYear: number, formData: FormData) {
   const caller = await requireAdmin()
   const amount = parseFloat(formData.get("amount") as string) || null
-  await popPrisma().popPayment.upsert({
+  await prisma.popPayment.upsert({
     where:  { assignmentId_vestingYear: { assignmentId, vestingYear } },
     update: { isPaid: true, paidAt: new Date(), amount: amount ?? undefined },
     create: { assignmentId, vestingYear, isPaid: true, paidAt: new Date(), amount: amount ?? undefined },
@@ -735,39 +684,9 @@ export async function markPopPaymentPaid(assignmentId: string, vestingYear: numb
 
 export async function markPopPaymentUnpaid(assignmentId: string, vestingYear: number, planId: string) {
   const caller = await requireAdmin()
-  await popPrisma().popPayment.deleteMany({ where: { assignmentId, vestingYear } })
+  await prisma.popPayment.deleteMany({ where: { assignmentId, vestingYear } })
   await audit(caller.email!, "MARK_POP_PAYMENT_UNPAID", `PopAssignment:${assignmentId}`, undefined, { vestingYear })
   revalidatePath("/admin/pop/" + planId)
   revalidatePath("/admin/reports")
   revalidatePath("/")
-}
-
-// ─── VESTING PLATBY ───────────────────────────────────────────────────────────
-
-export async function markVestingPaid(compensationId: string, vestingYear: number, formData: FormData) {
-  const caller = await requireAdmin()
-  const amount = parseFloat(formData.get("amount") as string) || null
-
-  // Načti vestingPercent z Compensation aby percentage nebylo 0
-  const comp = await prisma.compensation.findUnique({
-    where: { id: compensationId },
-    select: { vestingPercent: true },
-  })
-  const percentage = (comp as { vestingPercent: number } | null)?.vestingPercent ?? 25
-
-  await prisma.vestingPayment.upsert({
-    where:  { compensationId_vestingYear: { compensationId, vestingYear } },
-    update: { isPaid: true, paidAt: new Date(), amount: amount ?? undefined },
-    create: { compensationId, vestingYear, percentage, isPaid: true, paidAt: new Date(), amount: amount ?? undefined },
-  })
-
-  await audit(caller.email!, "MARK_VESTING_PAID", `Compensation:${compensationId}`, undefined, { vestingYear, amount })
-  revalidatePath("/admin/reports")
-}
-
-export async function markVestingUnpaid(compensationId: string, vestingYear: number) {
-  const caller = await requireAdmin()
-  await prisma.vestingPayment.deleteMany({ where: { compensationId, vestingYear } })
-  await audit(caller.email!, "MARK_VESTING_UNPAID", `Compensation:${compensationId}`, undefined, { vestingYear })
-  revalidatePath("/admin/reports")
 }

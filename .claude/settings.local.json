@@ -3,7 +3,10 @@
     "allow": [
       "Bash(npx prisma:*)",
       "Bash(npm install:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(grep -n \"\\\\\\\\.grantMultiplier\\\\|grantMultiplier\" app/admin/reports/export/route.ts)",
+      "Bash(grep -n \"^[[:space:]]*\\\\/\\\\/\" app/page.tsx app/admin/parameters/page.tsx app/admin/reports/page.tsx app/admin/pop/page.tsx app/admin/pop/[id]/page.tsx lib/actions.ts lib/calculator.ts)",
+      "Bash(grep -v \"^[^:]*:[0-9]*:\\\\s*//\")"
     ]
   }
 }

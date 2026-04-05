@@ -36,7 +36,6 @@ model User {
   snapshots        QuarterlySnapshot[]
   auditLogs        AuditLog[]
   parameterWeights ParameterWeight[]
-  phantomGrants    PhantomGrant[]
   popAssignments   PopAssignment[]
   division         Division? @relation(fields: [divisionId], references: [id], onDelete: SetNull)
 
@@ -98,9 +97,7 @@ model Period {
   companyParams PerformanceParameter[]
   compensations Compensation[]
   kpiTasks      KpiTask[]
-  boosters      StrategicBooster[]
   snapshots     QuarterlySnapshot[]
-  vestingBase   VestingBase[]
 }
 
 // ─── VÝKONNOSTNÍ PARAMETRY (generické – EBITDA, HORIZONT, vlastní…) ──────────
@@ -217,33 +214,6 @@ model PopPayment {
   @@unique([assignmentId, vestingYear])
 }
 
-// ─── POP – PHANTOM OPTION PLAN (legacy) ──────────────────────────────────────
-
-// Základní valuační data pro POP (globální, per období)
-model VestingBase {
-  id              String @id @default(cuid())
-  periodId        String @unique
-  baseMultiplier  Float  @default(6.0)  // základní koeficient
-  currentEbitda   Float  @default(0)    // aktuální EBITDA pro výpočet hodnoty firmy
-
-  period Period @relation(fields: [periodId], references: [id], onDelete: Cascade)
-}
-
-// Strategické boostery – navyšují valuační koeficient
-model StrategicBooster {
-  id              String    @id @default(cuid())
-  periodId        String
-  name            String
-  description     String?   // podmínky, co musí nastat, jak se měří
-  multiplierBoost Float     // o kolik navýší koeficient (např. +0.5)
-  isAchieved      Boolean   @default(false)
-  achievedAt      DateTime?
-  achievedQuarter Int?      // Q1–Q4
-  achievedYear    Int?
-
-  period Period @relation(fields: [periodId], references: [id], onDelete: Cascade)
-}
-
 // ─── ODMĚNA MANAŽERA (smluvní podmínky) ─────────────────────────────────────
 
 model Compensation {
@@ -258,66 +228,10 @@ model Compensation {
   targetBonusAnnual Float    @default(0)   // roční cílový bonus CZK
   kpiWeight         Float    @default(0)   // % z bonusu tvořené KPI složkou (0 = KPI nehraje roli)
 
-  // POP
-  sharePercent      Float    @default(0)   // podíl v % z vytvořené hodnoty
-  grantEbitda       Float    @default(0)   // EBITDA při vstupu do POP
-  grantMultiplier   Float    @default(0)   // multiplikátor při vstupu do POP
-  grantDate         DateTime @default(now())
-
-  // Vesting
-  vestingYears      Int      @default(4)   // celková délka vestingu
-  vestingPercent    Float    @default(25)  // % z hodnoty POP ročně
-
-  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  period   Period           @relation(fields: [periodId], references: [id], onDelete: Cascade)
-  payments VestingPayment[]
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  period   Period @relation(fields: [periodId], references: [id], onDelete: Cascade)
 
   @@unique([userId, periodId])
-}
-
-// Vesting – splátky POP
-model VestingPayment {
-  id             String    @id @default(cuid())
-  compensationId String
-  vestingYear    Int       // rok od grantu: 1, 2, 3, 4…
-  percentage     Float     // % z celkové hodnoty POP
-  isPaid         Boolean   @default(false)
-  paidAt         DateTime?
-  amount         Float?    // skutečně vyplacená částka CZK
-
-  compensation Compensation @relation(fields: [compensationId], references: [id], onDelete: Cascade)
-  @@unique([compensationId, vestingYear])
-}
-
-// ─── PHANTOM OPTION PLAN – GRANTY ────────────────────────────────────────────
-
-model PhantomGrant {
-  id              String   @id @default(cuid())
-  userId          String
-  name            String   // "POP 2024", "POP 2025 – Divize A"
-  sharePercent    Float    @default(0)   // podíl v %
-  grantEbitda     Float    @default(0)   // EBITDA při vstupu
-  grantMultiplier Float    @default(0)   // multiplikátor při vstupu
-  grantDate       DateTime @default(now())
-  vestingYears    Int      @default(4)
-  vestingPercent  Float    @default(25)  // % z hodnoty POP ročně
-  isActive        Boolean  @default(true)
-
-  user     User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  payments PhantomVestingPayment[]
-}
-
-model PhantomVestingPayment {
-  id             String    @id @default(cuid())
-  phantomGrantId String
-  vestingYear    Int
-  percentage     Float
-  isPaid         Boolean   @default(false)
-  paidAt         DateTime?
-  amount         Float?
-
-  grant PhantomGrant @relation(fields: [phantomGrantId], references: [id], onDelete: Cascade)
-  @@unique([phantomGrantId, vestingYear])
 }
 
 // ─── PER-MANAŽER PŘEPSÁNÍ VÁHY PARAMETRU ────────────────────────────────────

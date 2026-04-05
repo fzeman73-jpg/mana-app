@@ -73,15 +73,12 @@ export default async function Home({
     ? await Promise.all([
         prisma.compensation.findUnique({ where: { userId_periodId: { userId: dbUser.id, periodId: period.id } } }),
         prisma.kpiTask.findMany({ where: { userId: dbUser.id, periodId: period.id }, orderBy: { name: "asc" } }),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (prisma as any).performanceParameter.findMany({
+        prisma.performanceParameter.findMany({
           where: {
             periodId: period.id,
             OR: [
               { divisionId: null },
-              ...((dbUser as unknown as { divisionId: string | null }).divisionId
-                ? [{ divisionId: (dbUser as unknown as { divisionId: string }).divisionId }]
-                : []),
+              ...(dbUser.divisionId ? [{ divisionId: dbUser.divisionId }] : []),
             ],
           },
           include: { results: { orderBy: [{ year: "asc" }, { quarter: "asc" }] } },
@@ -94,25 +91,8 @@ export default async function Home({
       ])
     : [null, [], [], []]
 
-  type PerfParamFull = { id: string; name: string; weight: number; threshold: number; sortOrder: number; gatesParamId: string | null; results: { year: number; quarter: number; actual: number; target: number }[] }
-  const perfParamsTyped = perfParams as unknown as PerfParamFull[]
-
   // PopAssignments
-  type PopAssignmentFull = {
-    id: string; sharePercent: number; grantDate: Date; grantEbitda: number
-    payments: { vestingYear: number; isPaid: boolean; paidAt: Date | null; amount: number | null }[]
-    popPlan: {
-      id: string; name: string; baseMultiplier: number; grantEbitda: number
-      vestingGranularity: string; vestingYears: number
-      vestingPaymentDay: number; vestingPaymentMonth: number; vestingQuarters: number
-      minGrowthPercent: number
-      boosters:  { multiplierBoost: number; isAchieved: boolean }[]
-      yearData:  { year: number; currentEbitda: number }[]
-    }
-  }
-  const popAssignments = await (prisma as unknown as {
-    popAssignment: { findMany: (a: object) => Promise<PopAssignmentFull[]> }
-  }).popAssignment.findMany({
+  const popAssignments = await prisma.popAssignment.findMany({
     where:   { userId: dbUser.id },
     include: {
       payments: { orderBy: { vestingYear: "asc" } },
@@ -124,30 +104,26 @@ export default async function Home({
   const curQ = nowQ
   const curY = y ? parseInt(y) : nowY
 
-  const availableYears: number[] = Array.from(new Set(perfParamsTyped.flatMap(p => p.results.map(r => r.year)))).sort()
+  const availableYears: number[] = Array.from(new Set(perfParams.flatMap(p => p.results.map(r => r.year)))).sort()
   if (!availableYears.includes(nowY)) availableYears.push(nowY)
 
   // Přepsání vah
-  const weightOverrides = period ? await (prisma as unknown as {
-    parameterWeight: { findMany: (a: object) => Promise<{ parameterId: string; weight: number }[]> }
-  }).parameterWeight.findMany({ where: { userId: dbUser.id } }) : []
+  const weightOverrides = period ? await prisma.parameterWeight.findMany({ where: { userId: dbUser.id } }) : []
   const weightMap = new Map(weightOverrides.map(r => [r.parameterId, r.weight]))
 
-  type KpiTaskExt = { id: string; name: string; description: string | null; weight: number; isCompleted: boolean; taskType: string; completionPct: number | null; targetAmount: number | null; actualAmount: number | null }
-  const kpiTasksExt = kpiTasks as unknown as KpiTaskExt[]
-  const kpiNorm = kpiTasksExt.map(t => {
+  const kpiNorm = kpiTasks.map(t => {
     if (t.taskType === "PERCENT") return Math.min(1, (t.completionPct ?? 0) / 100)
     if (t.taskType === "AMOUNT" && (t.targetAmount ?? 0) > 0) return Math.min(1, (t.actualAmount ?? 0) / t.targetAmount!)
     return t.isCompleted ? 1 : 0
   })
 
-  const totalKpiW   = kpiTasksExt.reduce((s, t) => s + t.weight, 0)
-  const weightedKpi = kpiTasksExt.reduce((s, t, i) => s + t.weight * kpiNorm[i], 0)
+  const totalKpiW   = kpiTasks.reduce((s, t) => s + t.weight, 0)
+  const weightedKpi = kpiTasks.reduce((s, t, i) => s + t.weight * kpiNorm[i], 0)
   const kpiAch      = totalKpiW > 0 ? weightedKpi / totalKpiW : 0
 
   // ── Výpočet bonusu pro každý kvartál roku (pro roční přehled) ─────────────
   const quarterCalcs = [1, 2, 3, 4].map(qn => {
-    const inputs = perfParamsTyped.map(p => {
+    const inputs = perfParams.map(p => {
       const res = p.results.find(r => r.quarter === qn && r.year === curY)
       return {
         id: p.id, name: p.name,
@@ -156,11 +132,11 @@ export default async function Home({
         actual: res?.actual ?? 0, target: res?.target ?? 0,
       }
     })
-    const snap = snapshots.find((s: { quarter: number; year: number }) => s.quarter === qn && s.year === curY)
+    const snap = snapshots.find(s => s.quarter === qn && s.year === curY)
     const bonus = calcBonus(
       inputs,
       compensation?.targetBonusAnnual ?? 0,
-      kpiTasksExt.map((t, i) => ({ weight: t.weight, completionPct: kpiNorm[i] })),
+      kpiTasks.map((t, i) => ({ weight: t.weight, completionPct: kpiNorm[i] })),
       compensation?.kpiWeight ?? 0
     )
     const hasData = inputs.some(p => p.actual > 0 || p.target > 0)
@@ -401,7 +377,7 @@ export default async function Home({
                       <div className="h-full bg-brand-green rounded-full transition-all" style={{ width: `${Math.round(kpiAch * 100)}%` }} />
                     </div>
                     <div className="space-y-3">
-                      {kpiTasksExt.map((t, i) => {
+                      {kpiTasks.map((t, i) => {
                         const norm = kpiNorm[i]
                         const pctDisplay = Math.round(norm * 100)
                         const isGreen = norm >= 1

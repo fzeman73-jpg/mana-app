@@ -22,13 +22,7 @@ export default async function PopAdminPage() {
   const caller = await prisma.user.findUnique({ where: { email: session?.user?.email || "" } })
   if (caller?.role !== "ADMIN") redirect("/")
 
-  const pp = prisma as unknown as {
-    popPlan: {
-      findMany: (a: object) => Promise<PopPlanRow[]>
-    }
-  }
-
-  const plans = await pp.popPlan.findMany({
+  const plans = await prisma.popPlan.findMany({
     orderBy: { name: "asc" },
     include: { _count: { select: { assignments: true, boosters: true } } },
   })

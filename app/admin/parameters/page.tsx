@@ -33,7 +33,7 @@ export default async function ParametersPage({
   const [periods, users, divisions] = await Promise.all([
     prisma.period.findMany({ orderBy: { startDate: "desc" } }),
     prisma.user.findMany({ where: { isAllowed: true }, include: { division: true }, orderBy: { name: "asc" } }),
-    (prisma as unknown as { division: { findMany: (a: object) => Promise<{ id: string; name: string }[]> } }).division.findMany({ orderBy: { name: "asc" } }),
+    prisma.division.findMany({ orderBy: { name: "asc" } }),
   ])
 
   const sel  = periods.find(p => p.id === periodId) ?? null
@@ -46,29 +46,23 @@ export default async function ParametersPage({
       include: { results: { orderBy: { year: "asc" } } },
       orderBy: { sortOrder: "asc" },
     }),
-    (prisma as unknown as { quarterlySnapshot: { findMany: (a: object) => Promise<{ quarter: number; year: number }[]> } })
-      .quarterlySnapshot.findMany({ where: { periodId: sel.id }, select: { quarter: true, year: true } }),
+    prisma.quarterlySnapshot.findMany({ where: { periodId: sel.id }, select: { quarter: true, year: true } }),
   ]) : [[], []]
 
   // PopPlány (vždy)
-  type PopPlanRow = { id: string; name: string; grantEbitda: number; baseMultiplier: number; vestingGranularity: string; vestingYears: number }
-  type PopAssignmentRow = { id: string; popPlanId: string; sharePercent: number; grantDate: Date; popPlan: PopPlanRow }
-  const allPopPlans = await (prisma as unknown as { popPlan: { findMany: (a: object) => Promise<PopPlanRow[]> } })
-    .popPlan.findMany({ orderBy: { name: "asc" } })
+  const allPopPlans = await prisma.popPlan.findMany({ orderBy: { name: "asc" } })
 
   // Data pro vybraného uživatele + období
   const [compensation, kpiTasks, allCompensations, weightOverrides, popAssignments] = (sel && selU) ? await Promise.all([
     prisma.compensation.findUnique({ where: { userId_periodId: { userId: selU.id, periodId: sel.id } } }),
     prisma.kpiTask.findMany({ where: { userId: selU.id, periodId: sel.id }, orderBy: { name: "asc" } }),
     prisma.compensation.findMany({ where: { periodId: sel.id }, select: { userId: true } }),
-    (prisma as unknown as { parameterWeight: { findMany: (a: object) => Promise<{ parameterId: string; weight: number }[]> } })
-      .parameterWeight.findMany({ where: { userId: selU.id } }),
-    (prisma as unknown as { popAssignment: { findMany: (a: object) => Promise<PopAssignmentRow[]> } })
-      .popAssignment.findMany({ where: { userId: selU.id }, include: { popPlan: true }, orderBy: { grantDate: "asc" } }),
+    prisma.parameterWeight.findMany({ where: { userId: selU.id } }),
+    prisma.popAssignment.findMany({ where: { userId: selU.id }, include: { popPlan: true }, orderBy: { grantDate: "asc" } }),
   ]) : [null, [], sel ? await prisma.compensation.findMany({ where: { periodId: sel.id }, select: { userId: true } }) : [], [], []]
 
-  const weightMap      = new Map((weightOverrides as { parameterId: string; weight: number }[]).map(r => [r.parameterId, r.weight]))
-  const assignmentList = popAssignments as PopAssignmentRow[]
+  const weightMap      = new Map(weightOverrides.map(r => [r.parameterId, r.weight]))
+  const assignmentList = popAssignments
 
   const now   = new Date()
   const curQ  = Math.ceil((now.getMonth() + 1) / 3)
@@ -81,13 +75,8 @@ export default async function ParametersPage({
   ).sort()
   if (!availableYears.includes(nowY)) availableYears.push(nowY)
 
-  type PerfParamRow = {
-    id: string; name: string; description: string | null; weight: number; threshold: number
-    sortOrder: number; gatesParamId: string | null; divisionId: string | null
-    results: { id: string; quarter: number; year: number; actual: number; target: number; note: string | null; isLocked: boolean; lockedAt: Date | null; lockedByEmail: string | null }[]
-  }
-  const allParams = perfParams as unknown as PerfParamRow[]
-  const companyParams   = allParams.filter(p => !p.divisionId)
+  const allParams         = perfParams
+  const companyParams     = allParams.filter(p => !p.divisionId)
   const divisionParamsFor = (divId: string) => allParams.filter(p => p.divisionId === divId)
 
   const href = (params: Record<string, string | undefined>) => {
@@ -551,7 +540,7 @@ export default async function ParametersPage({
 
                   {/* VÝKONNOSTNÍ PARAMETRY — přepsání vah */}
                   {sel && (() => {
-                    const selUDivId = (selU as unknown as { divisionId: string | null }).divisionId
+                    const selUDivId = selU.divisionId
                     const managerParams = allParams.filter(p => !p.divisionId || p.divisionId === selUDivId)
                     if (managerParams.length === 0) return null
                     const totalOverride = managerParams.reduce((s, p) => s + (weightMap.get(p.id) ?? p.weight), 0)
@@ -647,15 +636,13 @@ export default async function ParametersPage({
                     </form>
 
                     {(() => {
-                      type KpiExt = { id: string; name: string; description: string | null; weight: number; isCompleted: boolean; taskType: string; completionPct: number | null; targetAmount: number | null; actualAmount: number | null }
-                      const tasks = kpiTasks as unknown as KpiExt[]
-                      if (tasks.length === 0) return (
+                      if (kpiTasks.length === 0) return (
                         <p className="text-center text-gray-300 py-6 text-sm italic border-2 border-dashed border-gray-100 rounded-xl">Žádné KPI úkoly.</p>
                       )
                       const typeLabel: Record<string, string> = { BOOLEAN: "Splněno/Ne", PERCENT: "% plnění", AMOUNT: "Částka" }
                       return (
                         <div className="space-y-2">
-                          {tasks.map(t => {
+                          {kpiTasks.map(t => {
                             const norm = t.taskType === "PERCENT" ? Math.min(1, (t.completionPct ?? 0) / 100)
                               : t.taskType === "AMOUNT" && (t.targetAmount ?? 0) > 0 ? Math.min(1, (t.actualAmount ?? 0) / t.targetAmount!)
                               : t.isCompleted ? 1 : 0
@@ -708,9 +695,9 @@ export default async function ParametersPage({
                               </div>
                             )
                           })}
-                          <p className={`text-[10px] text-right pt-1 font-black ${tasks.reduce((s, t) => s + t.weight, 0) === 100 ? "text-brand-green" : "text-brand-pink"}`}>
-                            Váha celkem: {tasks.reduce((s, t) => s + t.weight, 0)}%
-                            {tasks.reduce((s, t) => s + t.weight, 0) !== 100 && " (doporučeno 100%)"}
+                          <p className={`text-[10px] text-right pt-1 font-black ${kpiTasks.reduce((s, t) => s + t.weight, 0) === 100 ? "text-brand-green" : "text-brand-pink"}`}>
+                            Váha celkem: {kpiTasks.reduce((s, t) => s + t.weight, 0)}%
+                            {kpiTasks.reduce((s, t) => s + t.weight, 0) !== 100 && " (doporučeno 100%)"}
                           </p>
                         </div>
                       )

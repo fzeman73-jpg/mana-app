@@ -29,13 +29,6 @@ type PopAssignRec  = {
   payments: PopPaymentRec[]
 }
 
-function castPrisma() {
-  return prisma as unknown as {
-    popAssignment: { findMany: (a: object) => Promise<unknown[]> }
-    parameterWeight: { findMany: (a: object) => Promise<{ parameterId: string; weight: number }[]> }
-  }
-}
-
 export default async function ReportsPage({
   searchParams,
 }: {
@@ -55,7 +48,7 @@ export default async function ReportsPage({
   const sel = periods.find(p => p.id === periodId) ?? periods.find(p => p.isActive) ?? null
 
   // ── POP: global, not period-scoped ──────────────────────────────────────────
-  const rawAssignments = await castPrisma().popAssignment.findMany({
+  const rawAssignments = await prisma.popAssignment.findMany({
     include: {
       user:    true,
       payments: true,
@@ -119,9 +112,9 @@ export default async function ReportsPage({
   const managerExtras = sel ? await Promise.all(
     compensations.map(async comp => {
       const kpiTasks   = await prisma.kpiTask.findMany({ where: { userId: comp.userId, periodId: sel.id } })
-      const weightRows = await castPrisma().parameterWeight.findMany({ where: { userId: comp.userId } })
-      const weightMap  = new Map(weightRows.map((r: { parameterId: string; weight: number }) => [r.parameterId, r.weight]))
-      const kpiWeight  = (comp as unknown as { kpiWeight: number }).kpiWeight ?? 0
+      const weightRows = await prisma.parameterWeight.findMany({ where: { userId: comp.userId } })
+      const weightMap  = new Map(weightRows.map(r => [r.parameterId, r.weight]))
+      const kpiWeight  = comp.kpiWeight ?? 0
       return { comp, kpiTasks, weightMap, kpiWeight }
     })
   ) : []
@@ -135,8 +128,7 @@ export default async function ReportsPage({
     const rows = managerExtras.map(({ comp, kpiTasks, weightMap, kpiWeight }) => {
       const userDivId      = comp.user.divisionId
       const userPerfParams = perfParams.filter(p =>
-        (p as unknown as { divisionId: string | null }).divisionId === null ||
-        (p as unknown as { divisionId: string | null }).divisionId === userDivId
+        p.divisionId === null || p.divisionId === userDivId
       )
       const params = userPerfParams.map(p => {
         const res = p.results.find(r => r.quarter === q && r.year === periodYear)
@@ -154,10 +146,9 @@ export default async function ReportsPage({
         params,
         comp.targetBonusAnnual,
         kpiTasks.map(t => {
-          const tt = t as unknown as { taskType: string; completionPct: number | null; targetAmount: number | null; actualAmount: number | null }
           let cp = t.isCompleted ? 1 : 0
-          if (tt.taskType === "PERCENT") cp = Math.min(1, (tt.completionPct ?? 0) / 100)
-          else if (tt.taskType === "AMOUNT" && (tt.targetAmount ?? 0) > 0) cp = Math.min(1, (tt.actualAmount ?? 0) / tt.targetAmount!)
+          if (t.taskType === "PERCENT") cp = Math.min(1, (t.completionPct ?? 0) / 100)
+          else if (t.taskType === "AMOUNT" && (t.targetAmount ?? 0) > 0) cp = Math.min(1, (t.actualAmount ?? 0) / t.targetAmount!)
           return { weight: t.weight, completionPct: cp }
         }),
         kpiWeight

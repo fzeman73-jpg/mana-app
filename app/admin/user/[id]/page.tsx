@@ -89,7 +89,7 @@ export default async function UserAdminPage({ params }: { params: Promise<{ id: 
           <form action={setUserPosition.bind(null, user.id)} className="flex gap-3">
             <select
               name="position"
-              defaultValue={(user as unknown as { position: string | null }).position ?? ""}
+              defaultValue={user.position ?? ""}
               className="flex-1 bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
             >
               <option value="">— Bez pozice —</option>
