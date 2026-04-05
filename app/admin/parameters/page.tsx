@@ -75,6 +75,7 @@ export default async function ParametersPage({
   ).sort()
   if (!availableYears.includes(nowY)) availableYears.push(nowY)
 
+  type PerfParamRow = typeof perfParams[number]
   const allParams         = perfParams
   const companyParams     = allParams.filter(p => !p.divisionId)
   const divisionParamsFor = (divId: string) => allParams.filter(p => p.divisionId === divId)
