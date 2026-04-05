@@ -145,7 +145,7 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
                   name="grantEbitda" type="number" step="0.01" defaultValue={plan.grantEbitda} required
                   className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-3.5 font-bold text-sm outline-none focus:ring-2 ring-brand-cyan transition-all text-gray-900"
                 />
-                {plan.grantEbitda > 0 && <p className="text-[10px] text-gray-400 mt-1 ml-1">{fmt(plan.grantEbitda)}</p>}
+                <p className="text-[10px] text-gray-400 mt-1 ml-1">{fmt(plan.grantEbitda)}</p>
                 <p className="text-[9px] text-gray-400 mt-0.5 ml-1">EBITDA firmy v době vzniku plánu — základ pro výpočet hodnoty firmy při grantu</p>
               </div>
               <div>

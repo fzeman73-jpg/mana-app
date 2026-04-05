@@ -520,17 +520,17 @@ export default async function ParametersPage({
                         <div>
                           <Label>Základní plat / měs. (CZK)</Label>
                           <input name="baseSalary" type="number" defaultValue={compensation?.baseSalary ?? 0} className={inputCls} />
-                          {(compensation?.baseSalary ?? 0) > 0 && <p className="text-[9px] text-gray-400 mt-1">{fmt(compensation!.baseSalary)}</p>}
+                          <p className="text-[9px] text-gray-400 mt-1">{fmt(compensation?.baseSalary ?? 0)}</p>
                         </div>
                         <div>
                           <Label>Roční cílový bonus (CZK)</Label>
                           <input name="targetBonusAnnual" type="number" defaultValue={compensation?.targetBonusAnnual ?? 0} className={inputCls} />
-                          {(compensation?.targetBonusAnnual ?? 0) > 0 && <p className="text-[9px] text-gray-400 mt-1">{fmt(compensation!.targetBonusAnnual)}</p>}
+                          <p className="text-[9px] text-gray-400 mt-1">{fmt(compensation?.targetBonusAnnual ?? 0)}</p>
                         </div>
                         <div>
                           <Label>KPI váha (% z bonusu)</Label>
                           <input name="kpiWeight" type="number" step="0.1" min="0" max="100"
-                            defaultValue={(compensation as { kpiWeight?: number })?.kpiWeight ?? 0} className={inputCls} />
+                            defaultValue={compensation?.kpiWeight ?? 0} className={inputCls} />
                           <p className="text-[9px] text-gray-400 mt-1">Kolik % z cílového bonusu tvoří KPI složka. 0 = KPI bonus nepočítá.</p>
                         </div>
                       </div>
