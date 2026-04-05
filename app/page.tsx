@@ -363,7 +363,6 @@ export default async function Home({
                 <div className="space-y-3">
                   {[1, 2, 3, 4].map(q => {
                     const qTasks = kpiTasks.filter((t: KpiTaskRow) => (t.quarter ?? 1) === q)
-                    if (qTasks.length === 0) return null
                     const qNorms = qTasks.map((t: KpiTaskRow) => {
                       if (t.taskType === "PERCENT") return Math.min(1, (t.completionPct ?? 0) / 100)
                       if (t.taskType === "AMOUNT" && (t.targetAmount ?? 0) > 0) return Math.min(1, (t.actualAmount ?? 0) / t.targetAmount!)
