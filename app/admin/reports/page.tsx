@@ -309,7 +309,7 @@ export default async function ReportsPage({
                             <td className="py-4 px-4 text-right text-[11px]">
                               {(() => {
                                 const kpiResult = bonus.parameters.find(r => r.id === 'kpi')
-                                if (!kpiResult || kpiWeight === 0) return <span className="text-gray-300">—</span>
+                                if (!kpiResult || (comp.kpiWeight ?? 0) === 0) return <span className="text-gray-300">—</span>
                                 return (
                                   <span className={kpiResult.achievement >= 0.8 ? "text-brand-green font-black" : "text-brand-pink font-black"}>
                                     {pct(kpiResult.achievement * 100)}
