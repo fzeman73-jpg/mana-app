@@ -285,10 +285,10 @@ export default async function ParametersPage({
                             )
                           }
                           return (
-                            <form key={q} action={upsertQuarterlyResult.bind(null, p.id, q, curY)}>
-                              <div className="rounded-xl border p-3 border-gray-200 hover:border-brand-cyan/40">
-                                {qHeader}
-                                <div className="space-y-1.5">
+                            <div key={q} className="rounded-xl border p-3 border-gray-200 hover:border-brand-cyan/40">
+                              {qHeader}
+                              <div className="space-y-1.5">
+                                <form action={upsertQuarterlyResult.bind(null, p.id, q, curY)} className="space-y-1.5">
                                   <div>
                                     <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Skutečnost</p>
                                     <input name="actual" type="number" defaultValue={r?.actual ?? 0} step="any"
@@ -303,19 +303,17 @@ export default async function ParametersPage({
                                   </div>
                                   <input name="note" placeholder="Poznámka" defaultValue={r?.note ?? ""}
                                     className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-[10px] text-gray-600 outline-none focus:border-brand-cyan" />
-                                  <div className="flex gap-1">
-                                    <button type="submit" className="flex-1 bg-brand-cyan text-brand-navy py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-brand-pink hover:text-white transition-all">Uložit</button>
-                                    {isAdmin && (
-                                      <form action={lockQuarter.bind(null, p.id, q, curY)}>
-                                        <button type="submit" className="bg-brand-navy/10 text-brand-navy border border-brand-navy/20 px-3 py-1.5 rounded-lg text-[9px] font-black hover:bg-brand-navy hover:text-white transition-all" title="Uzavřít kvartál">
-                                          🔒
-                                        </button>
-                                      </form>
-                                    )}
-                                  </div>
-                                </div>
+                                  <button type="submit" className="w-full bg-brand-cyan text-brand-navy py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-brand-pink hover:text-white transition-all">Uložit</button>
+                                </form>
+                                {isAdmin && (
+                                  <form action={lockQuarter.bind(null, p.id, q, curY)}>
+                                    <button type="submit" className="w-full bg-brand-navy/10 text-brand-navy border border-brand-navy/20 px-3 py-1.5 rounded-lg text-[9px] font-black hover:bg-brand-navy hover:text-white transition-all" title="Uzavřít kvartál">
+                                      🔒
+                                    </button>
+                                  </form>
+                                )}
                               </div>
-                            </form>
+                            </div>
                           )
                         })}
                       </div>
