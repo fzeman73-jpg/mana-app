@@ -36,7 +36,7 @@ export default async function ParametersPage({
     prisma.division.findMany({ orderBy: { name: "asc" } }),
   ])
 
-  const sel  = periods.find(p => p.id === periodId) ?? null
+  const sel  = periods.find(p => p.id === periodId) ?? (tab === "manageri" ? (periods.find(p => p.isActive) ?? periods[0] ?? null) : null) as typeof periods[number] | null
   const selU = users.find(u => u.id === userId) ?? null
 
   // Data pro vybrané období
