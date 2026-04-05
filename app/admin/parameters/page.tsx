@@ -564,6 +564,8 @@ export default async function ParametersPage({
                     const managerParams = allParams.filter(p => !p.divisionId || p.divisionId === selUDivId)
                     if (managerParams.length === 0) return null
                     const totalOverride = managerParams.reduce((s, p) => s + (weightMap.get(p.id) ?? p.weight), 0)
+                    const kpiW = compensation?.kpiWeight ?? 0
+                    const grandTotal = totalOverride + kpiW
                     const hasAnyOverride = managerParams.some(p => weightMap.has(p.id))
                     return (
                       <section className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
@@ -572,9 +574,14 @@ export default async function ParametersPage({
                             <h3 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic">Výkonnostní parametry</h3>
                             <p className="text-[11px] text-gray-400 mt-0.5">Přepište váhu pro tohoto manažera. Prázdné = výchozí globální hodnota.</p>
                           </div>
-                          <span className={`text-[9px] font-black px-3 py-1 rounded-full flex-shrink-0 ${Math.abs(totalOverride - 100) < 0.1 ? "bg-brand-green/10 text-brand-green" : "bg-brand-pink/10 text-brand-pink"}`}>
-                            Celkem: {totalOverride.toFixed(1)}%
-                          </span>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className={`text-[9px] font-black px-3 py-1 rounded-full flex-shrink-0 ${Math.abs(grandTotal - 100) < 0.1 ? "bg-brand-green/10 text-brand-green" : "bg-brand-pink/10 text-brand-pink"}`}>
+                              Celkem: {grandTotal.toFixed(1)}% / 100%
+                            </span>
+                            <span className="text-[8px] text-gray-400">
+                              parametry {totalOverride.toFixed(1)}% + KPI {kpiW.toFixed(1)}%
+                            </span>
+                          </div>
                         </div>
                         <div className="space-y-2">
                           {managerParams.map(p => {
