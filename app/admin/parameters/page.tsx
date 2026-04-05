@@ -328,11 +328,6 @@ export default async function ParametersPage({
                   </details>
                 )
 
-                const weightBadge = (params: PerfParamRow[]) => {
-                  const total = params.reduce((s, p) => s + p.weight, 0)
-                  return <p className={`text-[10px] text-right mt-2 font-black ${total === 100 ? "text-brand-green" : "text-brand-pink"}`}>Váha: {total}% {total !== 100 ? "(doporučeno 100%)" : "✓"}</p>
-                }
-
                 return (
                   <div className="space-y-6">
                     {/* FIREMNÍ — platí všem */}
@@ -342,7 +337,6 @@ export default async function ParametersPage({
                         <span className="text-[9px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">platí všem manažerům</span>
                       </div>
                       <div className="space-y-3">{companyParams.map(renderParamCard)}</div>
-                      {companyParams.length > 0 && weightBadge(companyParams)}
                       {addParamForm(null, companyParams.length)}
                     </div>
 
@@ -357,7 +351,13 @@ export default async function ParametersPage({
                           </div>
                           <div className="space-y-3">{dps.map(renderParamCard)}</div>
                           {dps.length === 0 && <p className="text-[11px] text-gray-300 italic py-2">Žádné divize parametry.</p>}
-                          {dps.length > 0 && weightBadge(dps)}
+                          {/* Celková váha pro manažera v této divizi: firemní + divize */}
+                          {dps.length > 0 && (() => {
+                            const total = [...companyParams, ...dps].reduce((s, p) => s + p.weight, 0)
+                            return <p className={`text-[10px] text-right mt-2 font-black ${Math.abs(total - 100) < 0.1 ? "text-brand-green" : "text-brand-pink"}`}>
+                              Váha manažera v {div.name}: {total}% {Math.abs(total - 100) >= 0.1 ? "(doporučeno 100%)" : "✓"}
+                            </p>
+                          })()}
                           {addParamForm(div.id, dps.length)}
                         </div>
                       )
