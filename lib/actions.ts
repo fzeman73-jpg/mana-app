@@ -288,9 +288,10 @@ export async function upsertQuarterlyResult(
 
 export async function lockQuarter(parameterId: string, quarter: number, year: number) {
   const caller = await requireAdmin()
-  await prisma.quarterlyResult.update({
-    where: { parameterId_quarter_year: { parameterId, quarter, year } },
-    data:  { isLocked: true, lockedAt: new Date(), lockedByEmail: caller.email! },
+  await prisma.quarterlyResult.upsert({
+    where:  { parameterId_quarter_year: { parameterId, quarter, year } },
+    update: { isLocked: true, lockedAt: new Date(), lockedByEmail: caller.email! },
+    create: { parameterId, quarter, year, actual: 0, target: 0, isLocked: true, lockedAt: new Date(), lockedByEmail: caller.email! },
   })
   await audit(caller.email!, "LOCK_QUARTER", `PerformanceParameter:${parameterId}`, undefined, { quarter, year })
   revalidatePath("/admin/parameters")

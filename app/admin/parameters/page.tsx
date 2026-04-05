@@ -264,17 +264,20 @@ export default async function ParametersPage({
                                   )}
                                 </div>
                                 {r?.isLocked ? (
-                                  <div className="text-[10px] text-gray-400">
-                                    <p>Skutečnost: <span className="font-black text-gray-700">{fmt(r.actual)}</span></p>
-                                    <p>Cíl: {fmt(r.target)}</p>
-                                    <div className="flex items-center justify-between mt-1">
-                                      <p className="text-[9px] text-brand-green">🔒 Uzavřeno</p>
-                                      {isAdmin && (
-                                        <form action={unlockQuarter.bind(null, p.id, q, curY)}>
-                                          <button type="submit" className="text-[8px] font-black text-gray-400 hover:text-brand-pink transition-colors uppercase tracking-wider">🔓 Odemknout</button>
-                                        </form>
-                                      )}
+                                  <div className="space-y-2">
+                                    <div className="bg-brand-green/10 border border-brand-green/30 rounded-xl px-3 py-2">
+                                      <p className="text-[8px] font-black text-brand-green uppercase tracking-widest mb-1">🔒 Uzavřeno</p>
+                                      <p className="text-xs font-black text-gray-900">{fmt(r.actual)}</p>
+                                      <p className="text-[9px] text-gray-400">cíl: {fmt(r.target)}</p>
+                                      {r.lockedByEmail && <p className="text-[8px] text-gray-300 mt-1">{r.lockedByEmail}</p>}
                                     </div>
+                                    {isAdmin && (
+                                      <form action={unlockQuarter.bind(null, p.id, q, curY)}>
+                                        <button type="submit" className="w-full bg-brand-pink/10 text-brand-pink border border-brand-pink/30 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider hover:bg-brand-pink hover:text-white transition-all">
+                                          🔓 Odemknout
+                                        </button>
+                                      </form>
+                                    )}
                                   </div>
                                 ) : (
                                   <div className="space-y-1.5">
@@ -294,9 +297,11 @@ export default async function ParametersPage({
                                       className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-[10px] text-gray-600 outline-none focus:border-brand-cyan" />
                                     <div className="flex gap-1">
                                       <button type="submit" className="flex-1 bg-brand-cyan text-brand-navy py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-brand-pink hover:text-white transition-all">Uložit</button>
-                                      {r && isAdmin && (
+                                      {isAdmin && (
                                         <form action={lockQuarter.bind(null, p.id, q, curY)}>
-                                          <button type="submit" className="bg-gray-100 text-gray-500 px-2 py-1.5 rounded-lg text-[9px] font-black hover:bg-brand-navy hover:text-white transition-all" title="Uzavřít kvartál">🔒</button>
+                                          <button type="submit" className="bg-brand-navy/10 text-brand-navy border border-brand-navy/20 px-3 py-1.5 rounded-lg text-[9px] font-black hover:bg-brand-navy hover:text-white transition-all" title="Uzavřít kvartál">
+                                            🔒
+                                          </button>
                                         </form>
                                       )}
                                     </div>
