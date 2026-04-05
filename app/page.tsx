@@ -130,7 +130,7 @@ export default async function Home({
     const snap = snapshots.find(s => s.quarter === qn && s.year === curY)
     const bonus = calcBonus(
       inputs,
-      compensation?.targetBonusAnnual ?? 0,
+      (compensation?.targetBonusAnnual ?? 0) / 4,
       kpiTasks.map((t, i) => ({ weight: t.weight, completionPct: kpiNorm[i] })),
       compensation?.kpiWeight ?? 0
     )

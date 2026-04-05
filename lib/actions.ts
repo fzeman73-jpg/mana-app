@@ -475,7 +475,7 @@ export async function closeQuarter(periodId: string, quarter: number, year: numb
 
     const bonus = calcBonus(
       paramInputs,
-      comp.targetBonusAnnual,
+      comp.targetBonusAnnual / 4,
       kpiTasks.map(t => {
         let cp = t.isCompleted ? 1 : 0
         if (t.taskType === "PERCENT") cp = Math.min(1, (t.completionPct ?? 0) / 100)
