@@ -104,7 +104,7 @@ export default async function Home({
   const curQ = nowQ
   const curY = y ? parseInt(y) : nowY
 
-  const availableYears: number[] = Array.from(new Set(perfParams.flatMap(p => p.results.map(r => r.year)))).sort()
+  const availableYears: number[] = Array.from(new Set(perfParams.flatMap(p => p.results.map(r => Number(r.year))))).sort()
   if (!availableYears.includes(nowY)) availableYears.push(nowY)
 
   // Přepsání vah
