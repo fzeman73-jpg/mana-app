@@ -236,6 +236,17 @@ export default async function Home({
 
       <main className="max-w-6xl mx-auto py-10 px-6 space-y-8">
 
+        {/* ── HERO ─────────────────────────────────────────────────────────── */}
+        <div className="pb-2">
+          <p className="text-[11px] font-black text-gray-400 uppercase tracking-[0.3em] mb-1">Algotech Performance Management</p>
+          <h1 className="text-5xl sm:text-6xl font-black text-gray-900 uppercase tracking-tight leading-none">
+            {session.user?.name?.split(" ")[0]}
+          </h1>
+          <p className="text-2xl font-black text-brand-cyan uppercase tracking-tight mt-1">
+            {session.user?.name?.split(" ").slice(1).join(" ")}
+          </p>
+        </div>
+
         {noData ? (
           <div className="bg-white rounded-[3rem] border border-gray-100 shadow-sm p-16 text-center">
             <p className="text-5xl mb-4">⚙️</p>
