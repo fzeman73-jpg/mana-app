@@ -276,6 +276,7 @@ export default async function ReportsPage({
                         <th className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Cílový bonus</th>
                         <th className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Vypočtený bonus</th>
                         <th className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Plnění</th>
+                        <th className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">KPI</th>
                         {perfParams.map(p => (
                           <th key={p.id} className="text-right py-3 px-4 text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">{p.name}</th>
                         ))}
@@ -305,6 +306,17 @@ export default async function ReportsPage({
                                 {displayTarget > 0 ? pct(displayBonus / displayTarget * 100) : "—"}
                               </span>
                             </td>
+                            <td className="py-4 px-4 text-right text-[11px]">
+                              {(() => {
+                                const kpiResult = bonus.parameters.find(r => r.id === 'kpi')
+                                if (!kpiResult || kpiWeight === 0) return <span className="text-gray-300">—</span>
+                                return (
+                                  <span className={kpiResult.achievement >= 0.8 ? "text-brand-green font-black" : "text-brand-pink font-black"}>
+                                    {pct(kpiResult.achievement * 100)}
+                                  </span>
+                                )
+                              })()}
+                            </td>
                             {perfParams.map(p => {
                               const paramResult = bonus.parameters.find(r => r.id === p.id)
                               return (
@@ -330,7 +342,7 @@ export default async function ReportsPage({
                         <td className="py-2 px-4 text-right font-black text-brand-navy">
                           {fmt(qd.rows.reduce((s, r) => s + (r.snapshot ? r.snapshot.bonusAmount : r.bonus.total), 0))}
                         </td>
-                        <td colSpan={1 + perfParams.length} />
+                        <td colSpan={2 + perfParams.length} />
                       </tr>
                     </tfoot>
                   </table>
