@@ -214,8 +214,6 @@ export default async function ParametersPage({
                       <div className="flex-1">
                         <div className="flex items-center gap-3 flex-wrap">
                           <span className="font-black text-gray-900 text-sm">{p.name}</span>
-                          <span className="text-[9px] font-black bg-brand-cyan/10 text-brand-cyan px-2 py-0.5 rounded-full">váha {p.weight}%</span>
-                          <span className="text-[9px] font-black bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">bariéra {p.threshold}%</span>
                           {p.gatesParamId && (
                             <span className="text-[9px] font-black bg-brand-pink/10 text-brand-pink px-2 py-0.5 rounded-full">
                               gates → {allParams.find(x => x.id === p.gatesParamId)?.name ?? "?"}
@@ -223,6 +221,27 @@ export default async function ParametersPage({
                           )}
                         </div>
                         {p.description && <p className="text-[10px] text-gray-400 mt-1">{p.description}</p>}
+                        {/* Inline edit: váha + minimální plnění */}
+                        <form action={updatePerformanceParameter.bind(null, p.id)} className="flex items-center gap-3 mt-2 flex-wrap">
+                          <input type="hidden" name="name" value={p.name} />
+                          <input type="hidden" name="description" value={p.description ?? ""} />
+                          <input type="hidden" name="gatesParamId" value={p.gatesParamId ?? ""} />
+                          <label className="flex items-center gap-1.5">
+                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider">Váha</span>
+                            <input name="weight" type="number" step="0.1" min="0" max="100" defaultValue={p.weight}
+                              className="w-16 bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-900 outline-none focus:border-brand-cyan text-center" />
+                            <span className="text-[9px] text-gray-400">%</span>
+                          </label>
+                          <label className="flex items-center gap-1.5">
+                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider">Min. plnění</span>
+                            <input name="threshold" type="number" step="0.1" min="0" max="100" defaultValue={p.threshold}
+                              className="w-16 bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-900 outline-none focus:border-brand-cyan text-center" />
+                            <span className="text-[9px] text-gray-400">%</span>
+                          </label>
+                          <button type="submit" className="text-[9px] font-black px-2.5 py-1 rounded-lg bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20 hover:bg-brand-cyan hover:text-brand-navy transition-all">
+                            Uložit
+                          </button>
+                        </form>
                       </div>
                       <div className="flex items-center gap-2 ml-3">
                         {(() => {
@@ -231,7 +250,7 @@ export default async function ParametersPage({
                           const met = ach !== null ? ach >= p.threshold / 100 : null
                           return met !== null ? (
                             <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${met ? "bg-brand-green/10 text-brand-green" : "bg-brand-pink/10 text-brand-pink"}`}>
-                              {ach !== null ? `${Math.round(ach * 100)}%` : "—"} {met ? "✓" : "✗ bariéra"}
+                              {ach !== null ? `${Math.round(ach * 100)}%` : "—"} {met ? "✓" : "✗"}
                             </span>
                           ) : null
                         })()}
