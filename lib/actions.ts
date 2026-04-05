@@ -377,7 +377,7 @@ export async function resetParameterWeight(userId: string, parameterId: string) 
 
 // ─── KPI ÚKOLY ────────────────────────────────────────────────────────────────
 
-export async function adminAddKpiTask(userId: string, periodId: string, formData: FormData) {
+export async function adminAddKpiTask(userId: string, periodId: string, quarter: number, formData: FormData) {
   const caller   = await requireAdmin()
   const taskType = (formData.get("taskType") as string) || "BOOLEAN"
   const data = {
@@ -385,6 +385,7 @@ export async function adminAddKpiTask(userId: string, periodId: string, formData
     description:  (formData.get("description") as string) || undefined,
     weight:       parseFloat(formData.get("weight") as string) || 0,
     taskType,
+    quarter,
     targetAmount: taskType === "AMOUNT" ? (parseFloat(formData.get("targetAmount") as string) || null) : null,
     userId,
     periodId,
@@ -397,14 +398,16 @@ export async function adminAddKpiTask(userId: string, periodId: string, formData
 export async function updateKpiTaskCompletion(taskId: string, formData: FormData) {
   const caller   = await requireAdminOrManager()
   const taskType = formData.get("taskType") as string
-  const data: Record<string, unknown> = {}
+  const data: Record<string, unknown> = {
+    evaluationNote: (formData.get("evaluationNote") as string) || null,
+  }
   if (taskType === "PERCENT") {
     data.completionPct = Math.min(100, Math.max(0, parseFloat(formData.get("completionPct") as string) || 0))
   } else if (taskType === "AMOUNT") {
     data.actualAmount = parseFloat(formData.get("actualAmount") as string) || 0
   }
   await prisma.kpiTask.update({ where: { id: taskId }, data })
-  await audit(caller.email!, "TOGGLE_KPI_TASK", `KpiTask:${taskId}`, undefined, data)
+  await audit(caller.email!, "UPDATE_KPI_TASK", `KpiTask:${taskId}`, undefined, data)
   revalidatePath("/admin/parameters")
   revalidatePath("/")
 }
@@ -416,13 +419,12 @@ export async function adminDeleteKpiTask(taskId: string) {
   revalidatePath("/admin/parameters")
 }
 
-export async function adminToggleKpiTask(taskId: string, current: boolean) {
+export async function adminToggleKpiTask(taskId: string, current: boolean, formData: FormData) {
   const caller = await requireAdminOrManager()
-  await prisma.kpiTask.update({
-    where: { id: taskId },
-    data:  { isCompleted: !current, completedAt: !current ? new Date() : null },
-  })
-  await audit(caller.email!, "TOGGLE_KPI_TASK", `KpiTask:${taskId}`, { isCompleted: current }, { isCompleted: !current })
+  const note   = (formData.get("evaluationNote") as string) || null
+  const data   = { isCompleted: !current, completedAt: !current ? new Date() : null, evaluationNote: !current ? note : null }
+  await prisma.kpiTask.update({ where: { id: taskId }, data })
+  await audit(caller.email!, "TOGGLE_KPI_TASK", `KpiTask:${taskId}`, { isCompleted: current }, data)
   revalidatePath("/admin/parameters")
   revalidatePath("/")
 }

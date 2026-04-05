@@ -252,18 +252,20 @@ model ParameterWeight {
 // ─── KPI ÚKOLY (individuální) ────────────────────────────────────────────────
 
 model KpiTask {
-  id            String    @id @default(cuid())
-  userId        String
-  periodId      String
-  name          String
-  description   String?
-  weight        Float     @default(0)        // váha v % (součet = 100)
-  taskType      String    @default("BOOLEAN") // BOOLEAN | PERCENT | AMOUNT
-  isCompleted   Boolean   @default(false)    // pro BOOLEAN
-  completedAt   DateTime?
-  completionPct Float?                        // pro PERCENT (0–100)
-  targetAmount  Float?                        // pro AMOUNT – plán
-  actualAmount  Float?                        // pro AMOUNT – skutečnost
+  id              String    @id @default(cuid())
+  userId          String
+  periodId        String
+  quarter         Int       @default(1)       // 1–4: pro který kvartál platí
+  name            String
+  description     String?
+  weight          Float     @default(0)       // váha v % (součet v rámci kvartálu = 100)
+  taskType        String    @default("BOOLEAN") // BOOLEAN | PERCENT | AMOUNT
+  isCompleted     Boolean   @default(false)   // pro BOOLEAN
+  completedAt     DateTime?
+  completionPct   Float?                       // pro PERCENT (0–100)
+  targetAmount    Float?                       // pro AMOUNT – plán
+  actualAmount    Float?                       // pro AMOUNT – skutečnost
+  evaluationNote  String?                      // komentář při vyhodnocení
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   period Period @relation(fields: [periodId], references: [id], onDelete: Cascade)
