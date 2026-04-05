@@ -599,13 +599,27 @@ export async function createPopBooster(planId: string, formData: FormData) {
   revalidatePath("/")
 }
 
-export async function togglePopBooster(boosterId: string, current: boolean, planId: string) {
+export async function evaluatePopBooster(boosterId: string, planId: string, formData: FormData) {
+  const caller       = await requireAdminOrManager()
+  const achievedNote = (formData.get("achievedNote") as string) || null
+  const achievedAtRaw = formData.get("achievedAt") as string
+  const achievedAt   = achievedAtRaw ? new Date(achievedAtRaw) : new Date()
+  await prisma.popPlanBooster.update({
+    where: { id: boosterId },
+    data:  { isAchieved: true, achievedAt, achievedNote },
+  })
+  await audit(caller.email!, "EVALUATE_POP_BOOSTER", `PopPlanBooster:${boosterId}`, undefined, { achievedAt, achievedNote })
+  revalidatePath("/admin/pop/" + planId)
+  revalidatePath("/")
+}
+
+export async function revokePopBooster(boosterId: string, planId: string) {
   const caller = await requireAdminOrManager()
   await prisma.popPlanBooster.update({
     where: { id: boosterId },
-    data: { isAchieved: !current, achievedAt: !current ? new Date() : null },
+    data:  { isAchieved: false, achievedAt: null, achievedNote: null },
   })
-  await audit(caller.email!, "TOGGLE_POP_BOOSTER", `PopPlanBooster:${boosterId}`, { isAchieved: current }, { isAchieved: !current })
+  await audit(caller.email!, "REVOKE_POP_BOOSTER", `PopPlanBooster:${boosterId}`, undefined, { isAchieved: false })
   revalidatePath("/admin/pop/" + planId)
   revalidatePath("/")
 }

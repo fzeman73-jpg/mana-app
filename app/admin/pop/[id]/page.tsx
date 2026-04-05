@@ -4,7 +4,7 @@ import { redirect, notFound } from "next/navigation"
 import Image from "next/image"
 import {
   updatePopPlan, deletePopPlan,
-  createPopBooster, togglePopBooster, deletePopBooster,
+  createPopBooster, evaluatePopBooster, revokePopBooster, deletePopBooster,
   upsertPopYearData, deletePopYearData,
   upsertPopAssignment, deletePopAssignment,
   markPopPaymentPaid, markPopPaymentUnpaid,
@@ -13,7 +13,7 @@ import { calcPOP, calcVestingSchedule } from "@/lib/calculator"
 
 const fmt = (n: number) => Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(Math.round(n))
 
-type PopBooster    = { id: string; name: string; description: string | null; multiplierBoost: number; isAchieved: boolean }
+type PopBooster    = { id: string; name: string; description: string | null; multiplierBoost: number; isAchieved: boolean; achievedAt: Date | null; achievedNote: string | null }
 type PopYearData   = { id: string; year: number; currentEbitda: number }
 type PopPaymentRow = { id: string; vestingYear: number; isPaid: boolean; paidAt: Date | null; amount: number | null }
 type PopAssign     = {
@@ -287,28 +287,54 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
             <p className="text-sm text-gray-400 italic mb-4">Zatím nejsou přidány žádné boostery.</p>
           )}
 
-          <div className="space-y-2 mb-4">
+          <div className="space-y-3 mb-4">
             {plan.boosters.map(b => (
-              <div key={b.id} className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3">
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-gray-900 text-sm truncate">{b.name}</p>
-                  {b.description && <p className="text-[10px] text-gray-400 truncate">{b.description}</p>}
+              <div key={b.id} className={`rounded-2xl border overflow-hidden ${b.isAchieved ? "border-brand-green/30 bg-brand-green/5" : "border-gray-200 bg-gray-50"}`}>
+                {/* Hlavička boosteru */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-black text-gray-900 text-sm">{b.name}</p>
+                      {b.isAchieved && b.achievedAt && (
+                        <span className="text-[9px] font-black text-brand-green bg-brand-green/10 px-2 py-0.5 rounded-full">
+                          Splněn {new Date(b.achievedAt).toLocaleDateString("cs-CZ")}
+                        </span>
+                      )}
+                    </div>
+                    {b.description && <p className="text-[10px] text-gray-400 mt-0.5">{b.description}</p>}
+                    {b.isAchieved && b.achievedNote && (
+                      <p className="text-[10px] text-brand-green font-bold mt-1 italic">„{b.achievedNote}"</p>
+                    )}
+                  </div>
+                  <span className="text-[10px] font-black text-brand-pink flex-shrink-0">+{b.multiplierBoost}×</span>
+                  {b.isAchieved && (
+                    <form action={revokePopBooster.bind(null, b.id, plan.id)}>
+                      <button type="submit" className="px-3 py-1.5 rounded-xl font-black uppercase text-[8px] tracking-widest border bg-gray-100 text-gray-400 border-gray-200 hover:border-brand-pink hover:text-brand-pink transition-all active:scale-95 flex-shrink-0">
+                        Odvolat
+                      </button>
+                    </form>
+                  )}
+                  <form action={deletePopBooster.bind(null, b.id, plan.id)}>
+                    <button type="submit" className="text-[9px] font-black text-gray-400 hover:text-brand-pink transition-colors px-2 py-1 flex-shrink-0">×</button>
+                  </form>
                 </div>
-                <span className="text-[10px] font-black text-brand-pink flex-shrink-0">+{b.multiplierBoost}×</span>
-                <form action={togglePopBooster.bind(null, b.id, b.isAchieved, plan.id)}>
-                  <button type="submit" className={`px-3 py-1.5 rounded-xl font-black uppercase text-[8px] tracking-widest transition-all border active:scale-95 flex-shrink-0 ${
-                    b.isAchieved
-                      ? "bg-brand-green/10 text-brand-green border-brand-green/30"
-                      : "bg-gray-100 text-gray-400 border-gray-200 hover:border-gray-400"
-                  }`}>
-                    {b.isAchieved ? "Splněn" : "Nesplněn"}
-                  </button>
-                </form>
-                <form action={deletePopBooster.bind(null, b.id, plan.id)}>
-                  <button type="submit" className="text-[9px] font-black text-gray-400 hover:text-brand-pink transition-colors uppercase tracking-widest px-2 py-1 flex-shrink-0">
-                    ×
-                  </button>
-                </form>
+                {/* Formulář vyhodnocení — jen pokud nesplněn */}
+                {!b.isAchieved && (
+                  <form action={evaluatePopBooster.bind(null, b.id, plan.id)} className="flex items-center gap-2 px-4 pb-3 flex-wrap">
+                    <input
+                      name="achievedAt" type="date"
+                      defaultValue={new Date().toISOString().slice(0, 10)}
+                      className="bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-900 outline-none focus:ring-2 ring-brand-cyan"
+                    />
+                    <input
+                      name="achievedNote" placeholder="Poznámka k vyhodnocení (volitelné)"
+                      className="flex-1 min-w-[180px] bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-900 outline-none focus:ring-2 ring-brand-cyan placeholder:text-gray-400"
+                    />
+                    <button type="submit" className="px-4 py-2 rounded-xl font-black uppercase text-[8px] tracking-widest bg-brand-green/10 text-brand-green border border-brand-green/30 hover:bg-brand-green hover:text-white transition-all active:scale-95 flex-shrink-0">
+                      Označit jako splněn
+                    </button>
+                  </form>
+                )}
               </div>
             ))}
           </div>

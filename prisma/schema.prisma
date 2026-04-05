@@ -171,6 +171,7 @@ model PopPlanBooster {
   multiplierBoost Float
   isAchieved      Boolean   @default(false)
   achievedAt      DateTime?
+  achievedNote    String?   // výsledek vyhodnocení – proč/jak byl booster splněn
 
   popPlan PopPlan @relation(fields: [popPlanId], references: [id], onDelete: Cascade)
 }
