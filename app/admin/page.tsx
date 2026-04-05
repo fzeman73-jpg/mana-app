@@ -68,7 +68,7 @@ export default async function AdminPage({
             <a href="/admin/reports" className="flex items-center gap-2 bg-brand-navy/5 text-brand-navy border border-brand-navy/20 px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-brand-navy hover:text-white transition-all shadow-sm">
               Reporty
             </a>
-            <a href="/admin/parameters" className="flex items-center gap-2 bg-brand-pink/10 text-brand-pink border border-brand-pink/30 px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-brand-pink hover:text-white transition-all shadow-sm">
+            <a href="/admin/parameters?tab=manageri" className="flex items-center gap-2 bg-brand-pink/10 text-brand-pink border border-brand-pink/30 px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-brand-pink hover:text-white transition-all shadow-sm">
               Nastavení Plánů
             </a>
             <a href="/" className="flex items-center gap-2 bg-brand-cyan text-brand-navy px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-brand-pink hover:text-white transition-all shadow-sm">
