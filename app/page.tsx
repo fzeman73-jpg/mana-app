@@ -5,7 +5,6 @@ import { calcBonus, calcPOP, calcVestingSchedule, currentQuarter } from "@/lib/c
 import Image from "next/image"
 
 const fmt = (n: number) => Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', maximumFractionDigits: 0 }).format(Math.round(n))
-const pct = (n: number) => `${Math.round(n * 100)}%`
 
 export default async function Home({
   searchParams,
@@ -110,15 +109,12 @@ export default async function Home({
   const weightOverrides = period ? await prisma.parameterWeight.findMany({ where: { userId: dbUser.id } }) : []
   const weightMap = new Map(weightOverrides.map(r => [r.parameterId, r.weight]))
 
-  const kpiNorm = kpiTasks.map(t => {
+  type KpiTaskRow = typeof kpiTasks[number]
+  const kpiNorm = kpiTasks.map((t: KpiTaskRow) => {
     if (t.taskType === "PERCENT") return Math.min(1, (t.completionPct ?? 0) / 100)
     if (t.taskType === "AMOUNT" && (t.targetAmount ?? 0) > 0) return Math.min(1, (t.actualAmount ?? 0) / t.targetAmount!)
     return t.isCompleted ? 1 : 0
   })
-
-  const totalKpiW   = kpiTasks.reduce((s, t) => s + t.weight, 0)
-  const weightedKpi = kpiTasks.reduce((s, t, i) => s + t.weight * kpiNorm[i], 0)
-  const kpiAch      = totalKpiW > 0 ? weightedKpi / totalKpiW : 0
 
   // ── Výpočet bonusu pro každý kvartál roku (pro roční přehled) ─────────────
   const quarterCalcs = [1, 2, 3, 4].map(qn => {
@@ -360,79 +356,131 @@ export default async function Home({
 
             {/* ── BLOK 2: KPI úkoly ────────────────────────────────────────── */}
             <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-base font-black text-gray-900 uppercase tracking-widest">KPI Úkoly</h2>
-                  <div className="text-right">
-                    <p className="text-xs text-gray-400 uppercase tracking-wider">Splněno</p>
-                    <p className="font-black text-2xl text-brand-green">{pct(kpiAch)}</p>
-                  </div>
-                </div>
-
-                {kpiTasks.length === 0 ? (
-                  <p className="text-gray-300 text-sm italic text-center py-10">Žádné KPI úkoly nejsou zadány.</p>
-                ) : (
-                  <>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-6">
-                      <div className="h-full bg-brand-green rounded-full transition-all" style={{ width: `${Math.round(kpiAch * 100)}%` }} />
-                    </div>
-                    <div className="space-y-3">
-                      {kpiTasks.map((t, i) => {
-                        const norm = kpiNorm[i]
-                        const pctDisplay = Math.round(norm * 100)
-                        const isGreen = norm >= 1
-                        return (
-                          <div key={t.id} className={`px-5 py-4 rounded-2xl border ${norm > 0 ? "bg-brand-green/5 border-brand-green/20" : "bg-gray-50 border-gray-200"}`}>
-                            <div className="flex items-start gap-3">
-                              <div className={`w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0 ${isGreen ? "bg-brand-green" : norm > 0 ? "bg-brand-cyan" : "bg-gray-300"}`} />
-                              <div className="flex-1 min-w-0">
-                                <p className={`font-black text-base ${isGreen ? "text-brand-green italic" : "text-gray-900"}`}>{t.name}</p>
-                                {t.description && <p className="text-xs text-gray-400 mt-0.5">{t.description}</p>}
-                              </div>
-                              <span className="text-xs font-black text-brand-cyan bg-gray-100 px-2 py-1 rounded-full border border-gray-200 flex-shrink-0">{t.weight}%</span>
-                              <span className={`text-xs font-black px-2 py-1 rounded-full flex-shrink-0 ${isGreen ? "bg-brand-green/20 text-brand-green" : norm > 0 ? "bg-brand-cyan/10 text-brand-cyan" : "bg-gray-100 text-gray-400"}`}>
-                                {pctDisplay}%
-                              </span>
-                            </div>
-                            {canEdit && t.taskType === "BOOLEAN" && (
-                              <form action={adminToggleKpiTask.bind(null, t.id, t.isCompleted)} className="mt-3">
-                                <button className={`text-xs font-black px-4 py-2 rounded-xl border transition-all ${t.isCompleted ? "border-brand-green/30 text-brand-green hover:bg-brand-green/10" : "border-gray-200 text-gray-400 hover:border-brand-cyan hover:text-brand-cyan"}`}>
-                                  {t.isCompleted ? "✓ Splněno" : "Označit jako splněno"}
-                                </button>
-                              </form>
-                            )}
-                            {canEdit && t.taskType === "PERCENT" && (
-                              <form action={updateKpiTaskCompletion.bind(null, t.id)} className="mt-3 flex items-center gap-2">
-                                <input type="hidden" name="taskType" value="PERCENT" />
-                                <input name="completionPct" type="number" min="0" max="100" step="1"
-                                  defaultValue={t.completionPct ?? 0}
-                                  className="w-20 bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold text-gray-900 outline-none focus:border-brand-cyan" />
-                                <span className="text-sm text-gray-400 font-bold">%</span>
-                                <button type="submit" className="text-xs font-black px-3 py-1.5 rounded-xl border border-brand-cyan/30 text-brand-cyan hover:bg-brand-cyan/10 transition-all">Uložit</button>
-                              </form>
-                            )}
-                            {canEdit && t.taskType === "AMOUNT" && (
-                              <form action={updateKpiTaskCompletion.bind(null, t.id)} className="mt-3 flex items-center gap-2 flex-wrap">
-                                <input type="hidden" name="taskType" value="AMOUNT" />
-                                <span className="text-sm text-gray-400">Cíl: <span className="font-black text-gray-700">{fmt(t.targetAmount ?? 0)}</span></span>
-                                <span className="text-gray-300">|</span>
-                                <span className="text-sm text-gray-400">Skutečnost:</span>
-                                <input name="actualAmount" type="number" min="0" step="1"
-                                  defaultValue={t.actualAmount ?? 0}
-                                  className="w-28 bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold text-gray-900 outline-none focus:border-brand-cyan" />
-                                <button type="submit" className="text-xs font-black px-3 py-1.5 rounded-xl border border-brand-cyan/30 text-brand-cyan hover:bg-brand-cyan/10 transition-all">Uložit</button>
-                              </form>
-                            )}
-                            {!canEdit && t.taskType !== "BOOLEAN" && (
-                              <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full transition-all ${isGreen ? "bg-brand-green" : "bg-brand-cyan"}`} style={{ width: `${pctDisplay}%` }} />
-                              </div>
-                            )}
+              <h2 className="text-base font-black text-gray-900 uppercase tracking-widest mb-6">KPI Úkoly</h2>
+              {kpiTasks.length === 0 ? (
+                <p className="text-gray-300 text-sm italic text-center py-10">Žádné KPI úkoly nejsou zadány.</p>
+              ) : (
+                <div className="space-y-3">
+                  {[1, 2, 3, 4].map(q => {
+                    const qTasks = kpiTasks.filter((t: KpiTaskRow) => (t.quarter ?? 1) === q)
+                    if (qTasks.length === 0) return null
+                    const qNorms = qTasks.map((t: KpiTaskRow) => {
+                      if (t.taskType === "PERCENT") return Math.min(1, (t.completionPct ?? 0) / 100)
+                      if (t.taskType === "AMOUNT" && (t.targetAmount ?? 0) > 0) return Math.min(1, (t.actualAmount ?? 0) / t.targetAmount!)
+                      return t.isCompleted ? 1 : 0
+                    })
+                    const qTotalW   = qTasks.reduce((s: number, t: KpiTaskRow) => s + t.weight, 0)
+                    const qWeighted = qTasks.reduce((s: number, t: KpiTaskRow, i: number) => s + t.weight * qNorms[i], 0)
+                    const qAch      = qTotalW > 0 ? qWeighted / qTotalW : 0
+                    const qPct      = Math.round(qAch * 100)
+                    return (
+                      <details key={q} open={q === curQ} className="border border-gray-100 rounded-2xl overflow-hidden">
+                        <summary className="cursor-pointer list-none select-none px-6 py-4 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-black text-gray-700 uppercase tracking-wider">Q{q} {curY}</span>
+                            <span className="text-[9px] font-black text-gray-400">{qTasks.length} úkol{qTasks.length > 1 ? "y" : ""}</span>
                           </div>
-                        )
-                      })}
-                    </div>
-                  </>
-                )}
+                          <div className="flex items-center gap-3">
+                            <div className="w-24 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full transition-all ${qPct >= 100 ? "bg-brand-green" : qPct > 0 ? "bg-brand-cyan" : "bg-gray-300"}`} style={{ width: `${qPct}%` }} />
+                            </div>
+                            <span className={`text-xs font-black ${qPct >= 100 ? "text-brand-green" : qPct > 0 ? "text-brand-cyan" : "text-gray-400"}`}>{qPct}%</span>
+                          </div>
+                        </summary>
+                        <div className="px-6 py-4 space-y-3">
+                          {qTasks.map((t: KpiTaskRow, i: number) => {
+                            const norm       = qNorms[i]
+                            const pctDisplay = Math.round(norm * 100)
+                            const isGreen    = norm >= 1
+                            return (
+                              <div key={t.id} className={`rounded-2xl border overflow-hidden ${isGreen ? "border-brand-green/20" : norm > 0 ? "border-brand-cyan/20" : "border-gray-200"}`}>
+                                {/* Hlavička úkolu */}
+                                <div className={`px-5 py-4 ${isGreen ? "bg-brand-green/5" : norm > 0 ? "bg-brand-cyan/5" : "bg-gray-50"}`}>
+                                  <div className="flex items-start gap-3">
+                                    <div className={`w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0 ${isGreen ? "bg-brand-green" : norm > 0 ? "bg-brand-cyan" : "bg-gray-300"}`} />
+                                    <div className="flex-1 min-w-0">
+                                      <p className={`font-black text-base ${isGreen ? "text-brand-green" : "text-gray-900"}`}>{t.name}</p>
+                                      {t.description && <p className="text-xs text-gray-500 mt-0.5">{t.description}</p>}
+                                    </div>
+                                    <span className="text-xs font-black text-brand-cyan bg-white px-2 py-1 rounded-full border border-gray-200 flex-shrink-0">{t.weight}%</span>
+                                    <span className={`text-xs font-black px-2 py-1 rounded-full flex-shrink-0 ${isGreen ? "bg-brand-green/20 text-brand-green" : norm > 0 ? "bg-brand-cyan/10 text-brand-cyan" : "bg-gray-100 text-gray-400"}`}>
+                                      {pctDisplay}%
+                                    </span>
+                                  </div>
+                                  {/* Progress bar */}
+                                  {t.taskType !== "BOOLEAN" && (
+                                    <div className="mt-3 h-1.5 bg-white/60 rounded-full overflow-hidden border border-gray-100">
+                                      <div className={`h-full rounded-full transition-all ${isGreen ? "bg-brand-green" : "bg-brand-cyan"}`} style={{ width: `${pctDisplay}%` }} />
+                                    </div>
+                                  )}
+                                </div>
+                                {/* Detailní zadání */}
+                                {t.assignmentDetail && (
+                                  <div className="px-5 py-3 border-t border-gray-100 bg-white">
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Detailní zadání</p>
+                                    <p className="text-xs text-gray-600 whitespace-pre-wrap leading-relaxed">{t.assignmentDetail}</p>
+                                  </div>
+                                )}
+                                {/* Vyhodnocení */}
+                                {t.evaluationNote && (
+                                  <div className="px-5 py-3 border-t border-gray-100 bg-brand-cyan/5">
+                                    <p className="text-[9px] font-black text-brand-cyan uppercase tracking-widest mb-1">Vyhodnocení</p>
+                                    <p className="text-xs text-gray-700 italic">{t.evaluationNote}</p>
+                                  </div>
+                                )}
+                                {/* Akce (canEdit) */}
+                                {canEdit && (
+                                  <div className="px-5 py-3 border-t border-gray-100 bg-white">
+                                    {t.taskType === "BOOLEAN" && (
+                                      <form action={adminToggleKpiTask.bind(null, t.id, t.isCompleted)} className="space-y-2">
+                                        <textarea name="evaluationNote" placeholder="Komentář k vyhodnocení..." defaultValue={t.evaluationNote ?? ""} rows={2}
+                                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-700 outline-none focus:border-brand-cyan resize-none placeholder:text-gray-300" />
+                                        <button type="submit" className={`text-xs font-black px-4 py-2 rounded-xl border transition-all ${t.isCompleted ? "border-brand-green/30 text-brand-green hover:bg-brand-green/10" : "border-gray-200 text-gray-400 hover:border-brand-cyan hover:text-brand-cyan"}`}>
+                                          {t.isCompleted ? "✓ Splněno — klikem odvolat" : "Označit jako splněno"}
+                                        </button>
+                                      </form>
+                                    )}
+                                    {t.taskType === "PERCENT" && (
+                                      <form action={updateKpiTaskCompletion.bind(null, t.id)} className="space-y-2">
+                                        <input type="hidden" name="taskType" value="PERCENT" />
+                                        <div className="flex items-center gap-2">
+                                          <input name="completionPct" type="number" min="0" max="100" step="1" defaultValue={t.completionPct ?? 0}
+                                            className="w-20 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold text-gray-900 outline-none focus:border-brand-cyan" />
+                                          <span className="text-sm text-gray-400 font-bold">%</span>
+                                          <button type="submit" className="text-xs font-black px-3 py-1.5 rounded-xl border border-brand-cyan/30 text-brand-cyan hover:bg-brand-cyan/10 transition-all">Uložit</button>
+                                        </div>
+                                        <textarea name="evaluationNote" placeholder="Komentář k vyhodnocení..." defaultValue={t.evaluationNote ?? ""} rows={2}
+                                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-700 outline-none focus:border-brand-cyan resize-none placeholder:text-gray-300" />
+                                      </form>
+                                    )}
+                                    {t.taskType === "AMOUNT" && (
+                                      <form action={updateKpiTaskCompletion.bind(null, t.id)} className="space-y-2">
+                                        <input type="hidden" name="taskType" value="AMOUNT" />
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-sm text-gray-400">Cíl: <span className="font-black text-gray-700">{fmt(t.targetAmount ?? 0)}</span></span>
+                                          <span className="text-gray-300">|</span>
+                                          <div className="flex flex-col">
+                                            <input name="actualAmount" type="number" min="0" step="1" defaultValue={t.actualAmount ?? 0}
+                                              className="w-32 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold text-gray-900 outline-none focus:border-brand-cyan" />
+                                            <p className="text-[9px] text-gray-400 mt-0.5 ml-1">{fmt(t.actualAmount ?? 0)}</p>
+                                          </div>
+                                          <button type="submit" className="text-xs font-black px-3 py-1.5 rounded-xl border border-brand-cyan/30 text-brand-cyan hover:bg-brand-cyan/10 transition-all">Uložit</button>
+                                        </div>
+                                        <textarea name="evaluationNote" placeholder="Komentář k vyhodnocení..." defaultValue={t.evaluationNote ?? ""} rows={2}
+                                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-700 outline-none focus:border-brand-cyan resize-none placeholder:text-gray-300" />
+                                      </form>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </details>
+                    )
+                  })}
+                </div>
+              )}
             </section>
 
             {/* ── BLOK 3: POP (pouze pokud má přiřazen plán) ───────────────── */}
