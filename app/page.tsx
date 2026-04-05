@@ -529,13 +529,27 @@ export default async function Home({
 
                       {/* Boostery */}
                       {a.popPlan.boosters.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mb-5">
-                          {a.popPlan.boosters.map((b, i) => (
-                            <div key={i} className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-black border ${b.isAchieved ? "bg-brand-green/20 border-brand-green/30 text-brand-green" : "bg-white/5 border-white/10 text-white/30"}`}>
-                              <span>{b.isAchieved ? "✓" : "○"}</span>
-                              <span>+{b.multiplierBoost}×</span>
-                            </div>
-                          ))}
+                        <div className="mb-5">
+                          <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-2">Strategické boostery</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {a.popPlan.boosters.map((b: typeof a.popPlan.boosters[number], i: number) => (
+                              <div key={i} className={`px-4 py-3 rounded-2xl border ${b.isAchieved ? "bg-brand-green/10 border-brand-green/30" : "bg-white/5 border-white/10"}`}>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className={`text-sm font-black ${b.isAchieved ? "text-brand-green" : "text-white/30"}`}>
+                                    {b.isAchieved ? "✓" : "○"} +{b.multiplierBoost}×
+                                  </span>
+                                  <span className={`text-xs font-black truncate ${b.isAchieved ? "text-white/80" : "text-white/30"}`}>{b.name}</span>
+                                </div>
+                                {b.description && <p className={`text-[10px] ${b.isAchieved ? "text-white/40" : "text-white/20"}`}>{b.description}</p>}
+                                {b.isAchieved && b.achievedNote && (
+                                  <p className="text-[10px] text-brand-green/70 mt-1 italic">"{b.achievedNote}"</p>
+                                )}
+                                {b.isAchieved && b.achievedAt && (
+                                  <p className="text-[9px] text-white/20 mt-0.5">{new Date(b.achievedAt).toLocaleDateString('cs-CZ')}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
 
