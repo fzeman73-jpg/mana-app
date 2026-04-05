@@ -201,6 +201,7 @@ export default async function Home({
                 <p className="text-xs text-gray-400 uppercase tracking-wider mt-0.5">{dbUser.role === "ADMIN" ? "Admin" : dbUser.role === "MANAGER" ? "Manažer" : "Viewer"}</p>
               </div>
             </div>
+            <a href="/help" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Nápověda</a>
             <a href="/settings" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors">Nastavení</a>
             <form action={async () => { "use server"; await signOut() }}>
               <button className="text-gray-400 hover:text-brand-pink text-xs font-black uppercase tracking-widest transition-colors">Odhlásit</button>
