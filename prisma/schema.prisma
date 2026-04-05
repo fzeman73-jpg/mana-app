@@ -257,7 +257,8 @@ model KpiTask {
   periodId        String
   quarter         Int       @default(1)       // 1–4: pro který kvartál platí
   name            String
-  description     String?
+  description     String?                      // krátký popis / podmínky
+  assignmentDetail String?                     // detailní zadání (metodika, kontext, příklady)
   weight          Float     @default(0)       // váha v % (součet v rámci kvartálu = 100)
   taskType        String    @default("BOOLEAN") // BOOLEAN | PERCENT | AMOUNT
   isCompleted     Boolean   @default(false)   // pro BOOLEAN

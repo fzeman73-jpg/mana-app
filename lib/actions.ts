@@ -381,9 +381,10 @@ export async function adminAddKpiTask(userId: string, periodId: string, quarter:
   const caller   = await requireAdmin()
   const taskType = (formData.get("taskType") as string) || "BOOLEAN"
   const data = {
-    name:         formData.get("name") as string,
-    description:  (formData.get("description") as string) || undefined,
-    weight:       parseFloat(formData.get("weight") as string) || 0,
+    name:             formData.get("name") as string,
+    description:      (formData.get("description") as string) || undefined,
+    assignmentDetail: (formData.get("assignmentDetail") as string) || undefined,
+    weight:           parseFloat(formData.get("weight") as string) || 0,
     taskType,
     quarter,
     targetAmount: taskType === "AMOUNT" ? (parseFloat(formData.get("targetAmount") as string) || null) : null,

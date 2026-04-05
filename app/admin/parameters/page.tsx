@@ -643,8 +643,10 @@ export default async function ParametersPage({
                                 <div className="flex-1 space-y-1.5">
                                   <input name="name" placeholder="Název KPI úkolu..." required
                                     className="w-full bg-transparent px-3 py-2 outline-none font-bold text-sm text-gray-900 placeholder:text-gray-400" />
-                                  <textarea name="description" placeholder="Detailní popis a podmínky splnění..." rows={2}
+                                  <textarea name="description" placeholder="Krátký popis a podmínky splnění..." rows={2}
                                     className="w-full bg-transparent px-3 py-1 outline-none text-[11px] text-gray-500 placeholder:text-gray-300 resize-none" />
+                                  <textarea name="assignmentDetail" placeholder="Detailní zadání — metodika, kontext, příklady..." rows={3}
+                                    className="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 outline-none text-[11px] text-gray-600 placeholder:text-gray-300 resize-none focus:border-brand-cyan" />
                                 </div>
                                 <div className="flex flex-col gap-2 items-end">
                                   <input name="weight" type="number" step="1" min="0" max="100" placeholder="%" required
@@ -682,6 +684,7 @@ export default async function ParametersPage({
                                         <div className="flex-1 min-w-0">
                                           <p className={`font-black text-sm ${norm >= 1 ? "text-brand-green" : "text-gray-900"}`}>{t.name}</p>
                                           {t.description && <p className="text-[10px] text-gray-500 mt-0.5 whitespace-pre-wrap">{t.description}</p>}
+                                          {t.assignmentDetail && <p className="text-[10px] text-gray-400 mt-1 whitespace-pre-wrap border-l-2 border-gray-200 pl-2">{t.assignmentDetail}</p>}
                                           {t.evaluationNote && <p className="text-[10px] text-brand-cyan italic mt-1">Vyhodnocení: {t.evaluationNote}</p>}
                                         </div>
                                         <span className="text-[9px] font-black text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200 flex-shrink-0">{typeLabel[t.taskType] ?? t.taskType}</span>
