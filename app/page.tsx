@@ -174,27 +174,23 @@ export default async function Home({
       {/* ── NAVBAR ─────────────────────────────────────────────────────────── */}
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
         <div className="px-4 sm:px-8 py-4 flex justify-between items-center">
-          <a href="/"><Image src="/algotech-logo.png" alt="Algotech" width={175} height={52} className="object-contain" /></a>
-          <div className="flex items-center gap-3 sm:gap-5">
+          <div className="flex items-center gap-4">
+            <a href="/"><Image src="/algotech-logo.png" alt="Algotech" width={130} height={38} className="object-contain" /></a>
+            <div className="w-px h-6 bg-gray-200 hidden sm:block" />
+            <span className="text-sm font-black text-brand-cyan uppercase tracking-tight hidden sm:block">Cockpit</span>
+          </div>
+          <div className="flex items-center gap-4 sm:gap-6">
             {(isAdmin || isManager) && (
-              <a href="/admin/parameters?tab=manageri" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors">
-                Plány
-              </a>
+              <a href="/admin/parameters?tab=manageri" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Plány</a>
             )}
             {isAdmin && (
-              <a href="/admin/reports" className="hidden sm:block text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors">
-                Reporty
-              </a>
+              <a href="/admin/reports" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Reporty</a>
             )}
             {isAdmin && (
-              <>
-                <a href="/admin/pop" className="hidden sm:block text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors">
-                  POP
-                </a>
-                <a href="/admin" className="hidden sm:block bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/30 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-brand-cyan hover:text-brand-navy transition-all">
-                  Uživatelé
-                </a>
-              </>
+              <a href="/admin/pop" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">POP</a>
+            )}
+            {isAdmin && (
+              <a href="/admin" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Uživatelé</a>
             )}
             <div className="flex items-center gap-3">
               {session.user?.image && (
@@ -205,11 +201,9 @@ export default async function Home({
                 <p className="text-xs text-gray-400 uppercase tracking-wider mt-0.5">{dbUser.role === "ADMIN" ? "Admin" : dbUser.role === "MANAGER" ? "Manažer" : "Viewer"}</p>
               </div>
             </div>
-            <a href="/settings" className="text-gray-400 hover:text-brand-cyan transition-colors text-xs font-black uppercase tracking-widest">
-              Nastavení
-            </a>
+            <a href="/settings" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors">Nastavení</a>
             <form action={async () => { "use server"; await signOut() }}>
-              <button className="text-gray-400 hover:text-brand-pink transition-colors text-xs font-black uppercase tracking-widest">Odhlásit</button>
+              <button className="text-gray-400 hover:text-brand-pink text-xs font-black uppercase tracking-widest transition-colors">Odhlásit</button>
             </form>
           </div>
         </div>

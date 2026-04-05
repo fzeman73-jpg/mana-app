@@ -105,7 +105,7 @@ export default async function ParametersPage({
               {selU && <p className="text-[9px] font-black text-brand-cyan uppercase tracking-widest">{selU.name || selU.email}</p>}
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-4 sm:gap-6">
             {sel && (
               <>
                 <a href={href({ tab: "firma" })} className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${tab === "firma" ? "bg-brand-cyan text-brand-navy" : "text-gray-400 hover:text-brand-cyan"}`}>Firma</a>
