@@ -292,13 +292,13 @@ export default async function ParametersPage({
                                       <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Skutečnost</p>
                                       <input name="actual" type="number" defaultValue={r?.actual ?? 0} step="any"
                                         className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-bold text-gray-900 outline-none focus:border-brand-cyan" />
-                                      {(r?.actual ?? 0) > 0 && <p className="text-[9px] text-gray-400 mt-0.5">{fmt(r!.actual)}</p>}
+                                      <p className="text-[9px] text-gray-400 mt-0.5">{fmt(r?.actual ?? 0)}</p>
                                     </div>
                                     <div>
                                       <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Cíl</p>
                                       <input name="target" type="number" defaultValue={r?.target ?? 0} step="any"
                                         className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-bold text-gray-900 outline-none focus:border-brand-cyan" />
-                                      {(r?.target ?? 0) > 0 && <p className="text-[9px] text-gray-400 mt-0.5">{fmt(r!.target)}</p>}
+                                      <p className="text-[9px] text-gray-400 mt-0.5">{fmt(r?.target ?? 0)}</p>
                                     </div>
                                     <input name="note" placeholder="Poznámka" defaultValue={r?.note ?? ""}
                                       className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-[10px] text-gray-600 outline-none focus:border-brand-cyan" />
