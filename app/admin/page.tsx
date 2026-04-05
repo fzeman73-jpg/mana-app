@@ -43,39 +43,25 @@ export default async function AdminPage({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8 font-sans selection:bg-brand-cyan/20">
-      <div className="max-w-5xl mx-auto space-y-10">
-
-        {/* HLAVIČKA */}
-        <header className="flex flex-col md:flex-row justify-between items-center bg-white p-10 rounded-[3rem] shadow-sm border border-gray-100 gap-6">
-          <div className="flex items-center gap-6">
-            <a href="/"><Image src="/algotech-logo.png" alt="Algotech" width={200} height={58} className="object-contain" /></a>
-            <div className="w-px h-10 bg-gray-200 hidden md:block" />
-            <div>
-              <h1 className="text-2xl font-black italic uppercase tracking-tighter text-gray-900">
-                Správa <span className="text-brand-cyan">uživatelů</span>
-              </h1>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Přístupy a oprávnění</p>
-            </div>
+    <div className="min-h-screen bg-gray-50 font-sans selection:bg-brand-cyan/20">
+      <nav className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+        <div className="px-4 sm:px-8 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <a href="/"><Image src="/algotech-logo.png" alt="Algotech" width={130} height={38} className="object-contain" /></a>
+            <div className="w-px h-6 bg-gray-200 hidden sm:block" />
+            <span className="text-sm font-black text-brand-cyan uppercase tracking-tight hidden sm:block">Uživatelé</span>
           </div>
-          <div className="flex gap-3">
-            <a href="/admin/audit" className="flex items-center gap-2 bg-gray-50 text-gray-500 border border-gray-200 px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-gray-900 hover:text-white transition-all shadow-sm">
-              Audit
-            </a>
-            <a href="/admin/pop" className="flex items-center gap-2 bg-brand-green/10 text-brand-green border border-brand-green/30 px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-brand-green hover:text-brand-navy transition-all shadow-sm">
-              POP plány
-            </a>
-            <a href="/admin/reports" className="flex items-center gap-2 bg-brand-navy/5 text-brand-navy border border-brand-navy/20 px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-brand-navy hover:text-white transition-all shadow-sm">
-              Reporty
-            </a>
-            <a href="/admin/parameters?tab=manageri" className="flex items-center gap-2 bg-brand-pink/10 text-brand-pink border border-brand-pink/30 px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-brand-pink hover:text-white transition-all shadow-sm">
-              Nastavení Plánů
-            </a>
-            <a href="/" className="flex items-center gap-2 bg-brand-cyan text-brand-navy px-6 py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-brand-pink hover:text-white transition-all shadow-sm">
-              ← Cockpit
-            </a>
+          <div className="flex items-center gap-2 sm:gap-4">
+            <a href="/admin/parameters?tab=manageri" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Plány</a>
+            <a href="/admin/reports" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Reporty</a>
+            <a href="/admin/pop" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">POP</a>
+            <a href="/admin" className="bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/30 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all">Uživatelé</a>
+            <a href="/admin/audit" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Audit</a>
+            <a href="/" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors">← Cockpit</a>
           </div>
-        </header>
+        </div>
+      </nav>
+      <div className="max-w-5xl mx-auto p-8 space-y-8">
 
         {/* POZVÁNKA BANNER */}
         {inviteLink && (

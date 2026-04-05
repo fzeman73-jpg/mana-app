@@ -95,46 +95,30 @@ export default async function ParametersPage({
     <div className="min-h-screen bg-gray-50 font-sans selection:bg-brand-cyan/20">
 
       {/* HLAVIČKA */}
-      <header className="bg-white border-b border-gray-100 px-8 py-4 flex justify-between items-center sticky top-0 z-20 shadow-sm">
-        <div className="flex items-center gap-4">
-          <a href="/"><Image src="/algotech-logo.png" alt="Algotech" width={130} height={38} className="object-contain" /></a>
-          <div className="w-px h-7 bg-gray-200" />
-          <div>
-            <h1 className="text-sm font-black italic uppercase tracking-tight text-gray-900">
-              <span className="text-brand-pink">Nastavení Plánů</span>
-            </h1>
-            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Firemní metriky · Odměny · POP</p>
+      <nav className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+        <div className="px-4 sm:px-8 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <a href="/"><Image src="/algotech-logo.png" alt="Algotech" width={130} height={38} className="object-contain" /></a>
+            <div className="w-px h-6 bg-gray-200 hidden sm:block" />
+            <div className="hidden sm:block">
+              <p className="text-sm font-black text-brand-pink uppercase tracking-tight">Nastavení plánů</p>
+              {selU && <p className="text-[9px] font-black text-brand-cyan uppercase tracking-widest">{selU.name || selU.email}</p>}
+            </div>
           </div>
-          {selU && (
-            <>
-              <div className="w-px h-7 bg-gray-200" />
-              <div>
-                <p className="text-sm font-black text-gray-900">{selU.name || selU.email}</p>
-                <p className="text-[9px] font-black text-brand-cyan uppercase tracking-widest">
-                  {(selU as { division?: { name: string } | null })?.division?.name ?? "Bez divize"}
-                </p>
-              </div>
-            </>
-          )}
+          <div className="flex items-center gap-2 sm:gap-4">
+            {sel && (
+              <>
+                <a href={href({ tab: "firma" })} className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${tab === "firma" ? "bg-brand-cyan text-brand-navy" : "text-gray-400 hover:text-brand-cyan"}`}>Firma</a>
+                <a href={href({ tab: "manageri" })} className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${tab === "manageri" ? "bg-brand-cyan text-brand-navy" : "text-gray-400 hover:text-brand-cyan"}`}>Manažeři</a>
+              </>
+            )}
+            <a href="/admin/reports" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Reporty</a>
+            <a href="/admin/pop" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">POP</a>
+            <a href="/admin" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Uživatelé</a>
+            <a href="/" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors">← Cockpit</a>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          {sel && (
-            <>
-              <a href={href({ tab: "firma" })} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${tab === "firma" ? "bg-brand-cyan text-brand-navy" : "text-gray-500 hover:text-brand-cyan"}`}>
-                Firma
-              </a>
-              <a href={href({ tab: "manageri" })} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${tab === "manageri" ? "bg-brand-cyan text-brand-navy" : "text-gray-500 hover:text-brand-cyan"}`}>
-                Manažeři
-              </a>
-            </>
-          )}
-          {isAdmin && (
-            <a href="/admin" className="bg-gray-100 text-gray-600 px-4 py-2 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-pink hover:text-white transition-all ml-2">
-              ← Uživatelé
-            </a>
-          )}
-        </div>
-      </header>
+      </nav>
 
       <div className="max-w-6xl mx-auto p-8 space-y-6">
 

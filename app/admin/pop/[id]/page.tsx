@@ -71,25 +71,27 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
   const latestYearData = plan.yearData.at(-1)
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8 font-sans selection:bg-brand-cyan/20">
-      <div className="max-w-3xl mx-auto space-y-8">
-
-        {/* HLAVIČKA */}
-        <header className="flex flex-col md:flex-row justify-between items-center bg-white p-10 rounded-[3rem] shadow-sm border border-gray-100 gap-6">
-          <div className="flex items-center gap-6">
-            <a href="/"><Image src="/algotech-logo.png" alt="Algotech" width={160} height={46} className="object-contain" /></a>
-            <div className="w-px h-10 bg-gray-200 hidden md:block" />
-            <div>
-              <h1 className="text-xl font-black italic uppercase tracking-tighter text-gray-900">
-                <span className="text-brand-cyan">{plan.name}</span>
-              </h1>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">POP plán</p>
+    <div className="min-h-screen bg-gray-50 font-sans selection:bg-brand-cyan/20">
+      <nav className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+        <div className="px-4 sm:px-8 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <a href="/"><Image src="/algotech-logo.png" alt="Algotech" width={130} height={38} className="object-contain" /></a>
+            <div className="w-px h-6 bg-gray-200 hidden sm:block" />
+            <div className="hidden sm:block">
+              <p className="text-sm font-black text-brand-cyan uppercase tracking-tight">{plan.name}</p>
+              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">POP plán</p>
             </div>
           </div>
-          <a href="/admin/pop" className="bg-brand-cyan text-brand-navy px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-brand-pink hover:text-white transition-all shadow-sm">
-            ← POP plány
-          </a>
-        </header>
+          <div className="flex items-center gap-2 sm:gap-4">
+            <a href="/admin/parameters?tab=manageri" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Plány</a>
+            <a href="/admin/reports" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Reporty</a>
+            <a href="/admin/pop" className="bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/30 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest">← POP</a>
+            <a href="/admin" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Uživatelé</a>
+            <a href="/" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors">← Cockpit</a>
+          </div>
+        </div>
+      </nav>
+      <div className="max-w-3xl mx-auto p-8 space-y-8">
 
         {/* NASTAVENÍ PLÁNU */}
         <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
