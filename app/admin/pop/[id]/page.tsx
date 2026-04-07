@@ -83,11 +83,11 @@ export default async function PopPlanDetailPage({ params }: { params: Promise<{ 
             </div>
           </div>
           <div className="flex items-center gap-4 sm:gap-6">
-            <a href="/admin/parameters?tab=manageri" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Plány</a>
-            <a href="/admin/reports" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Reporty</a>
+            <a href="/admin/parameters?tab=manageri" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-all px-2 py-1 rounded-lg hover:ring-2 hover:ring-brand-cyan hidden sm:block">Plány</a>
+            <a href="/admin/reports" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-all px-2 py-1 rounded-lg hover:ring-2 hover:ring-brand-cyan hidden sm:block">Reporty</a>
             <a href="/admin/pop" className="bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/30 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest">← POP</a>
-            <a href="/admin" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Uživatelé</a>
-            <a href="/" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors">← Cockpit</a>
+            <a href="/admin" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-all px-2 py-1 rounded-lg hover:ring-2 hover:ring-brand-cyan hidden sm:block">Uživatelé</a>
+            <a href="/" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-all px-2 py-1 rounded-lg hover:ring-2 hover:ring-brand-cyan">← Cockpit</a>
           </div>
         </div>
       </nav>

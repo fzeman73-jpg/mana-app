@@ -181,16 +181,16 @@ export default async function Home({
           </div>
           <div className="flex items-center gap-4 sm:gap-6">
             {(isAdmin || isManager) && (
-              <a href="/admin/parameters?tab=manageri" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Plány</a>
+              <a href="/admin/parameters?tab=manageri" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-all hidden sm:block px-2 py-1 rounded-lg hover:ring-2 hover:ring-brand-cyan">Plány</a>
             )}
             {isAdmin && (
-              <a href="/admin/reports" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Reporty</a>
+              <a href="/admin/reports" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-all hidden sm:block px-2 py-1 rounded-lg hover:ring-2 hover:ring-brand-cyan">Reporty</a>
             )}
             {isAdmin && (
-              <a href="/admin/pop" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">POP</a>
+              <a href="/admin/pop" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-all hidden sm:block px-2 py-1 rounded-lg hover:ring-2 hover:ring-brand-cyan">POP</a>
             )}
             {isAdmin && (
-              <a href="/admin" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Uživatelé</a>
+              <a href="/admin" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-all hidden sm:block px-2 py-1 rounded-lg hover:ring-2 hover:ring-brand-cyan">Uživatelé</a>
             )}
             <div className="flex items-center gap-3">
               {session.user?.image && (
@@ -201,10 +201,10 @@ export default async function Home({
                 <p className="text-xs text-gray-400 uppercase tracking-wider mt-0.5">{dbUser.role === "ADMIN" ? "Admin" : dbUser.role === "MANAGER" ? "Manažer" : "Viewer"}</p>
               </div>
             </div>
-            <a href="/help" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Nápověda</a>
-            <a href="/settings" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors">Nastavení</a>
+            <a href="/help" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-all hidden sm:block px-2 py-1 rounded-lg hover:ring-2 hover:ring-brand-cyan">Nápověda</a>
+            <a href="/settings" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-all px-2 py-1 rounded-lg hover:ring-2 hover:ring-brand-cyan">Nastavení</a>
             <form action={async () => { "use server"; await signOut() }}>
-              <button className="text-gray-400 hover:text-brand-pink text-xs font-black uppercase tracking-widest transition-colors">Odhlásit</button>
+              <button className="text-gray-400 hover:text-brand-pink text-xs font-black uppercase tracking-widest transition-all px-2 py-1 rounded-lg hover:ring-2 hover:ring-brand-pink">Odhlásit</button>
             </form>
           </div>
         </div>

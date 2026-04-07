@@ -117,10 +117,10 @@ export default async function ParametersPage({
               </div>
             )}
             <div className="w-px h-5 bg-gray-200 hidden sm:block" />
-            <a href="/admin/reports" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Reporty</a>
-            <a href="/admin/pop" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">POP</a>
-            <a href="/admin" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors hidden sm:block">Uživatelé</a>
-            <a href="/" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-colors">← Cockpit</a>
+            <a href="/admin/reports" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-all px-2 py-1 rounded-lg hover:ring-2 hover:ring-brand-cyan hidden sm:block">Reporty</a>
+            <a href="/admin/pop" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-all px-2 py-1 rounded-lg hover:ring-2 hover:ring-brand-cyan hidden sm:block">POP</a>
+            <a href="/admin" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-all px-2 py-1 rounded-lg hover:ring-2 hover:ring-brand-cyan hidden sm:block">Uživatelé</a>
+            <a href="/" className="text-gray-400 hover:text-brand-cyan text-xs font-black uppercase tracking-widest transition-all px-2 py-1 rounded-lg hover:ring-2 hover:ring-brand-cyan">← Cockpit</a>
           </div>
         </div>
       </nav>
