@@ -9,12 +9,13 @@ const fmt = (n: number) => Intl.NumberFormat('cs-CZ', { style: 'currency', curre
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; y?: string; periodId?: string }>
+  searchParams: Promise<{ q?: string; y?: string; periodId?: string; error?: string }>
 }) {
   const session = await auth()
 
   // ── LOGIN ────────────────────────────────────────────────────────────────
   if (!session?.user?.email) {
+    const { error } = await searchParams
     return (
       <main className="flex min-h-screen items-center justify-center bg-gray-50 p-6 relative overflow-hidden">
         <div className="absolute -left-40 -top-40 w-[600px] h-[600px] bg-brand-cyan rounded-full opacity-5 blur-[150px]" />
@@ -29,6 +30,11 @@ export default async function Home({
           <p className="text-gray-400 mb-10 font-medium italic tracking-wide text-base underline decoration-brand-cyan/40 underline-offset-8">
             Sledování výkonnostních pobídek
           </p>
+          {error && (
+            <div className="mb-6 px-5 py-4 bg-brand-pink/10 border border-brand-pink/30 rounded-2xl text-brand-pink text-sm font-black text-left">
+              Nesprávný email nebo heslo.
+            </div>
+          )}
           <form action={loginWithCredentials} className="space-y-3 mb-6">
             <input name="email" type="email" placeholder="Email" required
               className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 font-bold text-base outline-none focus:ring-2 ring-brand-cyan transition-all placeholder:text-gray-400 text-gray-900" />
