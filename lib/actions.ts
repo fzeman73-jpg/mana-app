@@ -52,11 +52,17 @@ async function audit(userEmail: string, action: string, target?: string, oldValu
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 
 export async function loginWithCredentials(formData: FormData) {
-  await signIn("credentials", {
-    email:      formData.get("email"),
-    password:   formData.get("password"),
-    redirectTo: "/",
-  })
+  try {
+    await signIn("credentials", {
+      email:      formData.get("email"),
+      password:   formData.get("password"),
+      redirectTo: "/",
+    })
+  } catch (e: unknown) {
+    const msg = (e as { message?: string })?.message ?? ""
+    if (msg.includes("NEXT_REDIRECT")) throw e
+    redirect("/?error=CredentialsSignin")
+  }
 }
 
 // ─── SPRÁVA UŽIVATELŮ (Admin) ────────────────────────────────────────────────
