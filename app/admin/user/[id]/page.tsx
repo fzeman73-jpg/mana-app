@@ -17,6 +17,12 @@ export default async function UserAdminPage({ params }: { params: Promise<{ id: 
   ])
   if (!user) notFound()
 
+  const lastLogins = await prisma.auditLog.findMany({
+    where: { userEmail: user.email, action: "LOGIN" },
+    orderBy: { createdAt: "desc" },
+    take: 3,
+  })
+
   return (
     <div className="min-h-screen bg-gray-50 font-sans selection:bg-brand-cyan/20">
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
@@ -169,6 +175,27 @@ export default async function UserAdminPage({ params }: { params: Promise<{ id: 
               </button>
             </form>
           </div>
+        </section>
+
+        {/* POSLEDNÍ PŘIHLÁŠENÍ */}
+        <section className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+          <h2 className="text-[11px] font-black text-brand-cyan uppercase tracking-[0.3em] italic mb-6">Poslední přihlášení</h2>
+          {lastLogins.length === 0 ? (
+            <p className="text-[11px] text-gray-400">Žádné přihlášení zatím nezaznamenáno.</p>
+          ) : (
+            <div className="space-y-2">
+              {lastLogins.map(log => (
+                <div key={log.id} className="flex items-center justify-between py-2.5 px-4 bg-gray-50 rounded-2xl">
+                  <span className="text-xs font-black text-gray-900">
+                    {new Date(log.createdAt).toLocaleDateString("cs-CZ", { day: "numeric", month: "long", year: "numeric" })}
+                  </span>
+                  <span className="text-[11px] font-bold text-gray-400">
+                    {new Date(log.createdAt).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* SMAZÁNÍ */}
