@@ -55,6 +55,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         })
       }
 
+      await prisma.auditLog.create({
+        data: { userEmail: user.email, action: "LOGIN" },
+      })
+
       return true
     },
     async jwt({ token, user }) {
