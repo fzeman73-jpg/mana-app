@@ -18,7 +18,7 @@ export default async function UserAdminPage({ params }: { params: Promise<{ id: 
   if (!user) notFound()
 
   const lastLogins = await prisma.auditLog.findMany({
-    where: { userEmail: user.email, action: "LOGIN" },
+    where: { userEmail: user.email ?? "", action: "LOGIN" },
     orderBy: { createdAt: "desc" },
     take: 3,
   })
